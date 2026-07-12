@@ -263,7 +263,7 @@ export function AssetCategoryForm({
 
         <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
           <Link
-            href="/asset-categories"
+            href="/organization/asset-categories"
             className={buttonVariants({ variant: "outline", size: "lg" })}
           >
             Cancel

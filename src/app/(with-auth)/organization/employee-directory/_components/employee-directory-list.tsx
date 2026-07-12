@@ -15,6 +15,7 @@ export function EmployeeDirectoryList({
   employees,
   currentUserId,
   currentUserRole,
+  departments = [],
 }: {
   employees: {
     id: string;
@@ -25,9 +26,18 @@ export function EmployeeDirectoryList({
     department: {
       name: string;
     } | null;
+    headOfDepartment: {
+      id: string;
+      name: string;
+    } | null;
   }[];
   currentUserId?: string;
   currentUserRole?: string;
+  departments?: {
+    id: string;
+    name: string;
+    code: string;
+  }[];
 }) {
   return (
     <section className="overflow-hidden rounded-[1.5rem] border border-border bg-background">
@@ -75,6 +85,8 @@ export function EmployeeDirectoryList({
                         employeeId={employee.id}
                         employeeName={employee.name}
                         currentRole={employee.role}
+                        departments={departments}
+                        currentHeadOfDepartmentId={employee.headOfDepartment?.id}
                       />
                       {employee.status === "ACTIVE" ? (
                         <DeactivateEmployeeModal
@@ -114,4 +126,5 @@ export function EmployeeDirectoryList({
     </section>
   );
 }
+
 

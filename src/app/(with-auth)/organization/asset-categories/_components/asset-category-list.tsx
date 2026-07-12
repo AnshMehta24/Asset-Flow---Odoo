@@ -49,7 +49,7 @@ export function AssetCategoryList({
               <p className="text-foreground">{category._count.assets}</p>
               <div className="flex justify-end">
                 <Link
-                  href={`/asset-categories/${category.id}/edit`}
+                  href={`/organization/asset-categories/${category.id}/edit`}
                   className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
                   aria-label={`Edit ${category.name}`}
                 >

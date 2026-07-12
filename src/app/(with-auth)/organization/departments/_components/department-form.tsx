@@ -198,7 +198,7 @@ export function DepartmentForm({
 
         <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
           <Link
-            href="/departments"
+            href="/organization/departments"
             className={buttonVariants({ variant: "outline", size: "lg" })}
           >
             Cancel

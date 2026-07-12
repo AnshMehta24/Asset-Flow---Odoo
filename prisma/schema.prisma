@@ -182,14 +182,20 @@ model Asset {
   id                  String                 @id @default(cuid())
   tagNumber           Int                    @unique @default(autoincrement()) // formatted as AF-0001 in the UI via formatSequenceNo()
   name                String
+  description         String?
   serialNumber        String?                @unique
   qrCode              String?                @unique
+  manufacturer        String?
+  model               String?
   acquisitionDate     DateTime?              @db.Date
   acquisitionCost     Decimal?               @db.Decimal(12, 2)
+  warrantyStartDate   DateTime?              @db.Date
+  warrantyEndDate     DateTime?              @db.Date
   condition           AssetCondition         @default(GOOD)
   status              AssetStatus            @default(AVAILABLE)
   location            String?
   isBookable          Boolean                @default(false)
+  notes               String?
   photoUrls           String[]
   documentUrls        String[]
   categoryId          String

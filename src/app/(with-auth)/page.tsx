@@ -14,7 +14,7 @@ export default function Home() {
         </p>
         <div className="mt-6">
           <Link
-            href="/departments"
+            href="/organization/departments"
             className={buttonVariants({ size: "lg" })}
           >
             Go to Departments

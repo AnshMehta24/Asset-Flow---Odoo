@@ -152,8 +152,8 @@ export async function createDepartment(
     },
   });
 
-  revalidatePath("/departments");
-  redirect("/departments");
+  revalidatePath("/organization/departments");
+  redirect("/organization/departments");
 }
 
 export async function updateDepartment(
@@ -236,7 +236,7 @@ export async function updateDepartment(
     },
   });
 
-  revalidatePath("/departments");
-  revalidatePath(`/departments/${departmentId}/edit`);
-  redirect("/departments");
+  revalidatePath("/organization/departments");
+  revalidatePath(`/organization/departments/${departmentId}/edit`);
+  redirect("/organization/departments");
 }

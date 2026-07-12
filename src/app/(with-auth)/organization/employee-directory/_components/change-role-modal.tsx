@@ -10,10 +10,18 @@ export function ChangeRoleModal({
   employeeId,
   employeeName,
   currentRole,
+  departments = [],
+  currentHeadOfDepartmentId = "",
 }: {
   employeeId: string;
   employeeName: string;
   currentRole: string;
+  departments?: {
+    id: string;
+    name: string;
+    code: string;
+  }[];
+  currentHeadOfDepartmentId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -40,10 +48,10 @@ export function ChangeRoleModal({
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <Dialog.Title className="text-base font-semibold text-foreground">
-                Change Role
+                Edit Employee Settings
               </Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-muted-foreground">
-                Update role for <span className="font-medium text-foreground">{employeeName}</span>
+                Update details for <span className="font-medium text-foreground">{employeeName}</span>
               </Dialog.Description>
             </div>
             <Dialog.Close className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:text-foreground">
@@ -58,12 +66,29 @@ export function ChangeRoleModal({
               </label>
               <select
                 name="role"
-                defaultValue={currentRole}
+                defaultValue={currentRole === "DEPARTMENT_HEAD" ? "EMPLOYEE" : currentRole}
                 className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-ring"
               >
                 <option value="EMPLOYEE">Employee</option>
-                <option value="DEPARTMENT_HEAD">Department Head</option>
                 <option value="ASSET_MANAGER">Asset Manager</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">
+                Head of Department
+              </label>
+              <select
+                name="headOfDepartmentId"
+                defaultValue={currentHeadOfDepartmentId}
+                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-ring"
+              >
+                <option value="">None</option>
+                {departments.map((dept) => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name} ({dept.code})
+                  </option>
+                ))}
               </select>
             </div>
 

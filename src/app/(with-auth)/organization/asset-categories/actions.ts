@@ -171,8 +171,8 @@ export async function createAssetCategory(
     },
   });
 
-  revalidatePath("/asset-categories");
-  redirect("/asset-categories");
+  revalidatePath("/organization/asset-categories");
+  redirect("/organization/asset-categories");
 }
 
 export async function updateAssetCategory(
@@ -231,7 +231,7 @@ export async function updateAssetCategory(
     },
   });
 
-  revalidatePath("/asset-categories");
-  revalidatePath(`/asset-categories/${categoryId}/edit`);
-  redirect("/asset-categories");
+  revalidatePath("/organization/asset-categories");
+  revalidatePath(`/organization/asset-categories/${categoryId}/edit`);
+  redirect("/organization/asset-categories");
 }

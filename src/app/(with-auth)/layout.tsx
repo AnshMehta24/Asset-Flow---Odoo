@@ -23,7 +23,7 @@ export default async function WithAuthLayout({
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-4" />
         </header>
-        <div className="flex flex-1 flex-col">{children}</div>
+        <div className="flex flex-1 flex-col p-6">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );
