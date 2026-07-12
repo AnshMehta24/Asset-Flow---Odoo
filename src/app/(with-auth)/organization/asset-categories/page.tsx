@@ -4,6 +4,7 @@ import { getAssetCategoryList } from "./_lib/asset-category-data";
 import { OrganizationSetupTabs } from "@/components/organization-setup-tabs";
 import { requireCurrentUser } from "@/lib/auth/user";
 import { AccessDenied } from "@/components/access-denied";
+import { Pagination } from "@/components/ui/pagination";
 
 export default async function AssetCategoriesPage({
   searchParams,

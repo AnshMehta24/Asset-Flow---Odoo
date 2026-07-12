@@ -3,6 +3,7 @@ import { DepartmentScreen } from "./_components/department-screen";
 import { getDepartmentList } from "./_lib/department-data";
 import { requireCurrentUser } from "@/lib/auth/user";
 import { AccessDenied } from "@/components/access-denied";
+import { Pagination } from "@/components/ui/pagination";
 
 export default async function DepartmentsPage({
   searchParams,
