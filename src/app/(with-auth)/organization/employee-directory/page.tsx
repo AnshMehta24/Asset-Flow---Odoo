@@ -2,7 +2,8 @@ import { EmployeeDirectoryFilters } from "./_components/employee-directory-filte
 import { EmployeeDirectoryList } from "./_components/employee-directory-list";
 import { getEmployeeDirectoryList } from "./_lib/employee-directory-data";
 import { OrganizationSetupTabs } from "@/components/organization-setup-tabs";
-import { getCurrentUser } from "@/lib/auth/user";
+import { requireCurrentUser } from "@/lib/auth/user";
+import { AccessDenied } from "@/components/access-denied";
 import prisma from "@/lib/prisma";
 
 export default async function EmployeeDirectoryPage({
@@ -13,6 +14,12 @@ export default async function EmployeeDirectoryPage({
     status?: string;
   }>;
 }) {
+  const authedUser = await requireCurrentUser();
+
+  if (authedUser?.role !== "ADMIN") {
+    return <AccessDenied message="Only Admins can view the employee directory." />;
+  }
+
   const resolvedSearchParams = await searchParams;
   const search = resolvedSearchParams.search?.trim() ?? "";
   const status =
@@ -21,12 +28,11 @@ export default async function EmployeeDirectoryPage({
       ? resolvedSearchParams.status
       : "ALL";
 
-  const [employees, currentUser, departments] = await Promise.all([
+  const [employees, departments] = await Promise.all([
     getEmployeeDirectoryList({
       search,
       status,
     }),
-    getCurrentUser(),
     prisma.department.findMany({
       where: {
         status: "ACTIVE",
@@ -52,8 +58,8 @@ export default async function EmployeeDirectoryPage({
       />
       <EmployeeDirectoryList
         employees={employees}
-        currentUserId={currentUser?.id}
-        currentUserRole={currentUser?.role}
+        currentUserId={authedUser.id}
+        currentUserRole={authedUser.role}
         departments={departments}
       />
     </div>

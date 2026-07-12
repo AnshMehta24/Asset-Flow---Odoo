@@ -26,13 +26,12 @@ interface NotificationItem {
   createdAt: string;
 }
 
-export default function NotificationsPage() {
+export function NotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [filter, setFilter] = useState<"all" | "alerts" | "approvals" | "bookings">("all");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch notifications from API
   const fetchNotifications = async () => {
     setIsLoading(true);
     setError(null);
@@ -43,8 +42,8 @@ export default function NotificationsPage() {
       }
       const data = await response.json();
       setNotifications(data);
-    } catch (err: any) {
-      setError(err.message || "An error occurred");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsLoading(false);
     }
@@ -54,12 +53,11 @@ export default function NotificationsPage() {
     fetchNotifications();
   }, []);
 
-  // Compute dynamic relative time (e.g., 2m ago, 18m ago, 1h ago, 1d ago, 2d ago)
   const getRelativeTime = (dateString: string) => {
     const now = new Date();
     const date = new Date(dateString);
     const diffMs = now.getTime() - date.getTime();
-    
+
     const diffMins = Math.floor(diffMs / (60 * 1000));
     const diffHours = Math.floor(diffMs / (60 * 60 * 1000));
     const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
@@ -70,7 +68,6 @@ export default function NotificationsPage() {
     return `${diffDays}d ago`;
   };
 
-  // Map notification types to colors and icons
   const getNotificationStyle = (type: string) => {
     switch (type) {
       case "ASSET_ASSIGNED":
@@ -118,19 +115,30 @@ export default function NotificationsPage() {
     }
   };
 
-  // Handle Mark as Read
-  const handleMarkAsRead = (id: string) => {
+  const handleMarkAsRead = async (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
     );
+
+    const response = await fetch(`/api/notifications/${id}`, { method: "PATCH" });
+    if (!response.ok) {
+      // Revert on failure — the optimistic update didn't actually persist.
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: false } : n))
+      );
+    }
   };
 
-  // Handle Mark All as Read
-  const handleMarkAllAsRead = () => {
+  const handleMarkAllAsRead = async () => {
+    const previous = notifications;
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+
+    const response = await fetch("/api/notifications/read-all", { method: "POST" });
+    if (!response.ok) {
+      setNotifications(previous);
+    }
   };
 
-  // Filtering Logic
   const filteredNotifications = useMemo(() => {
     return notifications.filter((n) => {
       const style = getNotificationStyle(n.type);
@@ -144,7 +152,7 @@ export default function NotificationsPage() {
   }, [notifications]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans antialiased">
+    <div className="flex flex-col">
       {/* Header */}
       <header className="h-16 flex items-center justify-between px-6 border-b border-border bg-card/85 backdrop-blur-md sticky top-0 z-30">
         <div className="flex items-center gap-3">
@@ -183,7 +191,7 @@ export default function NotificationsPage() {
 
       {/* Page Content */}
       <main className="flex-1 p-6 space-y-6 max-w-4xl w-full mx-auto">
-        
+
         {/* Navigation Tabs */}
         <div className="flex flex-wrap items-center gap-2 border-b border-border/60 pb-3">
           <button

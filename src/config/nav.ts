@@ -52,7 +52,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     label: "Resource Booking",
-    href: "/bookings",
+    href: "/resource-booking",
     icon: CalendarClock,
     roles: ALL_ROLES,
   },
