@@ -1,0 +1,44 @@
+[
+  {
+    "type": "ASSET_ASSIGNED",
+    "title": "Asset Assigned",
+    "message": "Laptop AF-0014 assigned to Priya shah",
+    "link": "/assets/14",
+    "isRead": false
+  },
+  {
+    "type": "MAINTENANCE_APPROVED",
+    "title": "Maintenance Approved",
+    "message": "Maintenance request AF-0055 approved",
+    "link": "/maintenance/55",
+    "isRead": false
+  },
+  {
+    "type": "BOOKING_CONFIRMED",
+    "title": "Booking Confirmed",
+    "message": "Booking confirmed : Room B2 : 2:00 to 3:00 PM",
+    "link": "/bookings/room-b2",
+    "isRead": false
+  },
+  {
+    "type": "TRANSFER_APPROVED",
+    "title": "Transfer Approved",
+    "message": "Transfer approved : AF-0033 to facilities dept",
+    "link": "/allocations/33",
+    "isRead": false
+  },
+  {
+    "type": "OVERDUE_RETURN",
+    "title": "Overdue Return Alert",
+    "message": "Overdue return : AF-0021 was due 3 days ago",
+    "link": "/allocations/21",
+    "isRead": false
+  },
+  {
+    "type": "AUDIT_DISCREPANCY",
+    "title": "Audit Discrepancy Flagged",
+    "message": "audit discrepancy flagged : AF-0088 damaged",
+    "link": "/audit/88",
+    "isRead": false
+  }
+]

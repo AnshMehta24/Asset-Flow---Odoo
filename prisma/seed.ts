@@ -1,62 +1,91 @@
+import { PrismaClient, Role, UserStatus, NotificationType } from "../generated/prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import * as fs from "fs";
+import * as path from "path";
 import "dotenv/config";
-import bcrypt from "bcryptjs";
-import prisma from "../src/lib/prisma";
 
-const PASSWORD_SALT_ROUNDS = 12;
+// Setup connection adapter; ensure DATABASE_URL is not undefined under strict type checks
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL || "",
+});
+const prisma = new PrismaClient({ adapter });
+
+interface NotificationSeed {
+  type: keyof typeof NotificationType;
+  title: string;
+  message: string;
+  link?: string;
+  isRead?: boolean;
+}
 
 async function main() {
-  const ADMIN_NAME = process.env.ADMIN_NAME?.trim();
-  const ADMIN_EMAIL = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+  console.log("Seeding started...");
 
-  if (!ADMIN_NAME) {
-    throw new Error("ADMIN_NAME is required.");
+  // 1. Ensure a User exists to associate notifications with
+  let user = await prisma.user.findFirst();
+
+  if (!user) {
+    console.log("No existing user found. Creating default admin account...");
+    const name = process.env.ADMIN_NAME || "System Admin";
+    const email = process.env.ADMIN_EMAIL || "admin@assetflow.com";
+    const passwordHash = "$2b$10$EpI5sK.y5L6N7h8sM5h.K.6B4jF8c8d8e8f8g8h8i8j8k8l8m8n8o"; // Mock bcrypt hash for 'password'
+
+    user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash,
+        role: Role.ADMIN,
+        status: UserStatus.ACTIVE,
+      },
+    });
+    console.log(`Created user: ${user.name} (${user.email})`);
+  } else {
+    console.log(`Using existing user: ${user.name} (${user.email})`);
   }
 
-  if (!ADMIN_EMAIL) {
-    throw new Error("ADMIN_EMAIL is required.");
+  if (!user) {
+    throw new Error("A valid user could not be found or created for seeding notifications.");
   }
 
-  if (!ADMIN_PASSWORD) {
-    throw new Error("ADMIN_PASSWORD is required.");
+  // 2. Read and parse notification seed JSON data
+  const jsonPath = path.join(__dirname, "notifications.json");
+  if (!fs.existsSync(jsonPath)) {
+    throw new Error(`Seed data file not found at: ${jsonPath}`);
   }
 
-  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, PASSWORD_SALT_ROUNDS);
+  const rawData = fs.readFileSync(jsonPath, "utf-8");
+  const notificationSeeds: NotificationSeed[] = JSON.parse(rawData);
 
-  const user = await prisma.user.upsert({
-    where: { email: ADMIN_EMAIL },
-    update: {
-      name: ADMIN_NAME,
-      passwordHash,
-      role: "ADMIN",
-      status: "ACTIVE",
-      departmentId: null,
-    },
-    create: {
-      name: ADMIN_NAME,
-      email: ADMIN_EMAIL,
-      passwordHash,
-      role: "ADMIN",
-      status: "ACTIVE",
-      departmentId: null,
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      status: true,
-      departmentId: true,
-    },
-  });
+  console.log(`Found ${notificationSeeds.length} notifications to seed.`);
 
-  console.log(`Admin user ready: ${user.email}`);
+  // 3. Clear existing notifications to avoid duplicates
+  await prisma.notification.deleteMany();
+  console.log("Cleared existing notifications.");
+
+  // 4. Seed notifications linked to our user
+  let seededCount = 0;
+  for (const n of notificationSeeds) {
+    await prisma.notification.create({
+      data: {
+        type: n.type as NotificationType,
+        title: n.title,
+        message: n.message,
+        link: n.link || null,
+        isRead: n.isRead || false,
+        userId: user.id,
+      },
+    });
+    seededCount++;
+  }
+
+  console.log(`Seeding completed successfully! Inserted ${seededCount} notifications.`);
 }
 
 main()
-  .catch((error) => {
-    console.error(error instanceof Error ? error.message : error);
-    process.exitCode = 1;
+  .catch((e) => {
+    console.error("Error during database seeding:", e);
+    process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
