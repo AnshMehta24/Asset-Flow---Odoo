@@ -12,6 +12,7 @@ export type AssetListFilters = {
   departmentId?: string;
   condition?: string;
   isBookable?: string;
+  page?: number;
 };
 
 export type AssetListItem = {
@@ -66,40 +67,52 @@ export async function getAssetList(filters: AssetListFilters = {}) {
       ? false
       : undefined;
 
-  const assets = await prisma.asset.findMany({
-    where: {
-      ...(statusFilter ? { status: statusFilter as never } : {}),
-      ...(categoryFilter ? { categoryId: categoryFilter } : {}),
-      ...(departmentFilter ? { departmentId: departmentFilter } : {}),
-      ...(conditionFilter ? { condition: conditionFilter as never } : {}),
-      ...(isBookableFilter !== undefined ? { isBookable: isBookableFilter } : {}),
-      ...(search
-        ? {
-            OR: [
-              { name: { contains: search, mode: "insensitive" as const } },
-              { serialNumber: { contains: search, mode: "insensitive" as const } },
-              { qrCode: { contains: search, mode: "insensitive" as const } },
-              { location: { contains: search, mode: "insensitive" as const } },
-              { manufacturer: { contains: search, mode: "insensitive" as const } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ tagNumber: "desc" }],
-    select: {
-      id: true,
-      tagNumber: true,
-      name: true,
-      status: true,
-      condition: true,
-      location: true,
-      isBookable: true,
-      category: { select: { name: true } },
-      department: { select: { name: true } },
-    },
-  });
+  const page = filters.page && filters.page > 0 ? filters.page : 1;
+  const pageSize = 10;
 
-  return assets.map((a) => ({
+  const whereClause = {
+    ...(statusFilter ? { status: statusFilter as never } : {}),
+    ...(categoryFilter ? { categoryId: categoryFilter } : {}),
+    ...(departmentFilter ? { departmentId: departmentFilter } : {}),
+    ...(conditionFilter ? { condition: conditionFilter as never } : {}),
+    ...(isBookableFilter !== undefined ? { isBookable: isBookableFilter } : {}),
+    ...(search
+      ? {
+          OR: [
+            { name: { contains: search, mode: "insensitive" as const } },
+            { serialNumber: { contains: search, mode: "insensitive" as const } },
+            { qrCode: { contains: search, mode: "insensitive" as const } },
+            { location: { contains: search, mode: "insensitive" as const } },
+            { manufacturer: { contains: search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  const [assets, totalCount] = await Promise.all([
+    prisma.asset.findMany({
+      where: whereClause,
+      orderBy: [{ tagNumber: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        tagNumber: true,
+        name: true,
+        status: true,
+        condition: true,
+        location: true,
+        isBookable: true,
+        category: { select: { name: true } },
+        department: { select: { name: true } },
+      },
+    }),
+    prisma.asset.count({
+      where: whereClause,
+    }),
+  ]);
+
+  const items = assets.map((a) => ({
     id: a.id,
     tag: formatAssetTag(a.tagNumber),
     name: a.name,
@@ -110,6 +123,12 @@ export async function getAssetList(filters: AssetListFilters = {}) {
     departmentName: a.department?.name ?? null,
     isBookable: a.isBookable,
   })) satisfies AssetListItem[];
+
+  return {
+    assets: items,
+    totalCount,
+    totalPages: Math.ceil(totalCount / pageSize),
+  };
 }
 
 // ──────────────────────────────────────────────

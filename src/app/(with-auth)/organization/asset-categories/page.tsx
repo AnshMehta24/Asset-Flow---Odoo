@@ -10,6 +10,7 @@ export default async function AssetCategoriesPage({
 }: {
   searchParams: Promise<{
     search?: string;
+    page?: string;
   }>;
 }) {
   const user = await requireCurrentUser();
@@ -20,13 +21,21 @@ export default async function AssetCategoriesPage({
 
   const resolvedSearchParams = await searchParams;
   const search = resolvedSearchParams.search?.trim() ?? "";
-  const categories = await getAssetCategoryList(search);
+  const page = Number(resolvedSearchParams.page) || 1;
+
+  const { categories, totalCount, totalPages } = await getAssetCategoryList({
+    search,
+    page,
+  });
 
   return (
     <div className="flex flex-col gap-5">
       <OrganizationSetupTabs activeTab="categories" />
       <AssetCategoryFilters key={search} initialSearch={search} />
-      <AssetCategoryList categories={categories} />
+      <div className="flex flex-col gap-4">
+        <AssetCategoryList categories={categories} />
+        <Pagination currentPage={page} totalPages={totalPages} totalCount={totalCount} />
+      </div>
     </div>
   );
 }

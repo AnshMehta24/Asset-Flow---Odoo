@@ -12,6 +12,7 @@ export default async function EmployeeDirectoryPage({
   searchParams: Promise<{
     search?: string;
     status?: string;
+    page?: string;
   }>;
 }) {
   const authedUser = await requireCurrentUser();
@@ -27,11 +28,13 @@ export default async function EmployeeDirectoryPage({
     resolvedSearchParams.status === "INACTIVE"
       ? resolvedSearchParams.status
       : "ALL";
+  const page = Number(resolvedSearchParams.page) || 1;
 
   const [employees, departments] = await Promise.all([
     getEmployeeDirectoryList({
       search,
       status,
+      page,
     }),
     prisma.department.findMany({
       where: {

@@ -36,13 +36,17 @@ cp .env.example .env
 
 ```bash
 # .env
-DATABASE_URL=            # PostgreSQL connection string
+DATABASE_URL=             # PostgreSQL connection string
 
 ADMIN_NAME=               # used by the db seed to create the first Admin account
 ADMIN_EMAIL=
 ADMIN_PASSWORD=
 
 SESSION_SECRET=           # random secret used to sign session JWTs
+
+CLOUDINARY_CLOUD_NAME=    # required for asset photo upload + QR code storage
+CLOUDINARY_API_KEY=       # required for signed Cloudinary uploads
+CLOUDINARY_API_SECRET=    # required for signed Cloudinary uploads
 ```
 
 Generate a `SESSION_SECRET` with:
@@ -50,6 +54,23 @@ Generate a `SESSION_SECRET` with:
 ```bash
 openssl rand -base64 32
 ```
+
+### Cloudinary setup
+
+Asset photo uploads and generated QR codes use Cloudinary.
+
+Required variables:
+
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+
+Notes:
+
+- `CLOUDINARY_CLOUD_NAME` is your Cloudinary account or product environment name.
+- The current implementation uses signed server-side uploads, so the API key must have upload/create permission.
+- If Cloudinary credentials are missing, the asset module still works, but photo upload and automatic QR code storage will not.
+- If Cloudinary returns a permission error such as `missing permissions (actions=["create"])`, the key/environment does not have upload permission and you will need either a different key or an unsigned upload preset flow.
 
 ### 3. Apply database migrations
 

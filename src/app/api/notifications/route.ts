@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { requireCurrentUser } from "@/lib/auth/user";
 import prisma from "@/lib/prisma";
 import { requireCurrentUser } from "@/lib/auth/user";
 
