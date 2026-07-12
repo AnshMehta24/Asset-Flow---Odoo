@@ -1,6 +1,6 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { PrismaClient } from "../generated/prisma/client";
+import { PrismaClient, type Role } from "../generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const PASSWORD_SALT_ROUNDS = 12;
@@ -16,6 +16,12 @@ const prisma = new PrismaClient({ adapter });
 // ─────────────────────────────────────────────────────────────────────────────
 function d(dateStr: string) {
   return new Date(dateStr);
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,6 +88,106 @@ async function main() {
   }
 
   console.log(`  ✔ ${Object.keys(depts).length} departments`);
+
+  const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? "Demo@1234";
+  const demoPasswordHash = await bcrypt.hash(DEMO_PASSWORD, PASSWORD_SALT_ROUNDS);
+
+  const demoUsers = [
+    {
+      key: "assetManager",
+      name: "Maya Patel",
+      email: "maya.patel@assetflow.dev",
+      role: "ASSET_MANAGER" as Role,
+      deptCode: "OPS",
+    },
+    {
+      key: "departmentHead",
+      name: "Priya Shah",
+      email: "priya.shah@assetflow.dev",
+      role: "DEPARTMENT_HEAD" as Role,
+      deptCode: "ENG",
+      headOfDeptCode: "ENG",
+    },
+    {
+      key: "employeeBackend",
+      name: "Aarav Sharma",
+      email: "aarav.sharma@assetflow.dev",
+      role: "EMPLOYEE" as Role,
+      deptCode: "ENG-BE",
+    },
+    {
+      key: "employeeFrontend",
+      name: "Neha Verma",
+      email: "neha.verma@assetflow.dev",
+      role: "EMPLOYEE" as Role,
+      deptCode: "ENG-FE",
+    },
+    {
+      key: "employeeHr",
+      name: "Ritu Iyer",
+      email: "ritu.iyer@assetflow.dev",
+      role: "EMPLOYEE" as Role,
+      deptCode: "HR",
+    },
+    {
+      key: "employeeSales",
+      name: "Vikram Singh",
+      email: "vikram.singh@assetflow.dev",
+      role: "EMPLOYEE" as Role,
+      deptCode: "SALES",
+    },
+    {
+      key: "employeeOps",
+      name: "Sana Khan",
+      email: "sana.khan@assetflow.dev",
+      role: "EMPLOYEE" as Role,
+      deptCode: "OPS",
+    },
+    {
+      key: "employeeDesign",
+      name: "Aditya Rao",
+      email: "aditya.rao@assetflow.dev",
+      role: "EMPLOYEE" as Role,
+      deptCode: "DES",
+    },
+  ];
+
+  const usersByKey: Record<string, { id: string; email: string; name: string; departmentId: string | null }> = {
+    admin: { id: admin.id, email: admin.email, name: ADMIN_NAME, departmentId: null },
+  };
+
+  for (const userSeed of demoUsers) {
+    const user = await prisma.user.upsert({
+      where: { email: userSeed.email },
+      update: {
+        name: userSeed.name,
+        passwordHash: demoPasswordHash,
+        role: userSeed.role,
+        status: "ACTIVE",
+        departmentId: depts[userSeed.deptCode],
+      },
+      create: {
+        name: userSeed.name,
+        email: userSeed.email,
+        passwordHash: demoPasswordHash,
+        role: userSeed.role,
+        status: "ACTIVE",
+        departmentId: depts[userSeed.deptCode],
+      },
+      select: { id: true, email: true, name: true, departmentId: true },
+    });
+
+    usersByKey[userSeed.key] = user;
+
+    if (userSeed.headOfDeptCode) {
+      await prisma.department.update({
+        where: { code: userSeed.headOfDeptCode },
+        data: { headId: user.id },
+      });
+    }
+  }
+
+  console.log(`  ✔ ${demoUsers.length + 1} demo users ready`);
 
   // ── Asset Categories with Custom Fields ────────────────────────────────────
   async function upsertCategory(
@@ -988,6 +1094,562 @@ async function main() {
   }
 
   console.log(`  ✔ ${assetCount} assets seeded (skipped existing serials)`);
+
+  console.log("  ↺ Rebuilding demo workflow data...");
+
+  await prisma.notification.deleteMany();
+  await prisma.activityLog.deleteMany();
+  await prisma.auditItem.deleteMany();
+  await prisma.auditAssignment.deleteMany();
+  await prisma.auditCycle.deleteMany();
+  await prisma.maintenanceRequest.deleteMany();
+  await prisma.booking.deleteMany();
+  await prisma.transferRequest.deleteMany();
+  await prisma.allocation.deleteMany();
+
+  const assetPool = await prisma.asset.findMany({
+    orderBy: { tagNumber: "asc" },
+    select: {
+      id: true,
+      name: true,
+      tagNumber: true,
+      departmentId: true,
+      isBookable: true,
+      status: true,
+    },
+  });
+
+  const reservedAssetIds = new Set<string>();
+  const claimedAssetIds = new Set<string>();
+
+  function takeAsset(
+    label: string,
+    predicate: (asset: (typeof assetPool)[number]) => boolean = () => true,
+  ) {
+    const asset = assetPool.find((item) => !claimedAssetIds.has(item.id) && predicate(item));
+    if (!asset) {
+      throw new Error(`Not enough demo assets available for ${label}.`);
+    }
+
+    claimedAssetIds.add(asset.id);
+    return asset;
+  }
+
+  const overdueAsset = takeAsset("overdue allocation", (asset) => !asset.isBookable);
+  const upcomingAsset = takeAsset("upcoming allocation", (asset) => !asset.isBookable);
+  const activeAsset = takeAsset("active allocation", (asset) => !asset.isBookable);
+  const departmentAsset = takeAsset("department allocation", (asset) => !asset.isBookable);
+  const transferAsset = takeAsset("transfer allocation", (asset) => !asset.isBookable);
+  const returnedAsset = takeAsset("returned allocation history", (asset) => !asset.isBookable);
+  const maintenancePendingAsset = takeAsset("pending maintenance", (asset) => !asset.isBookable);
+  const maintenanceInProgressAsset = takeAsset("in-progress maintenance", (asset) => !asset.isBookable);
+  const maintenanceResolvedAsset = takeAsset("resolved maintenance", (asset) => !asset.isBookable);
+  const auditMissingAsset = takeAsset("audit discrepancy missing");
+  const auditDamagedAsset = takeAsset("audit discrepancy damaged");
+  const auditVerifiedAsset = takeAsset("audit verified asset");
+  const bookingMorningAsset = takeAsset("morning booking", (asset) => asset.isBookable);
+  const bookingAfternoonAsset = takeAsset("afternoon booking", (asset) => asset.isBookable);
+  const bookingReservedAsset = takeAsset("reserved booking", (asset) => asset.isBookable);
+  const bookingTomorrowAsset = takeAsset("future booking", (asset) => asset.isBookable);
+
+  reservedAssetIds.add(bookingReservedAsset.id);
+
+  const today = new Date();
+  today.setHours(9, 0, 0, 0);
+
+  await prisma.asset.updateMany({
+    where: { id: { in: assetPool.map((asset) => asset.id) } },
+    data: { status: "AVAILABLE" },
+  });
+
+  await prisma.asset.updateMany({
+    where: {
+      id: {
+        in: [
+          overdueAsset.id,
+          upcomingAsset.id,
+          activeAsset.id,
+          departmentAsset.id,
+          transferAsset.id,
+        ],
+      },
+    },
+    data: { status: "ALLOCATED" },
+  });
+
+  await prisma.asset.updateMany({
+    where: { id: { in: [maintenancePendingAsset.id, maintenanceInProgressAsset.id] } },
+    data: { status: "UNDER_MAINTENANCE" },
+  });
+
+  await prisma.asset.updateMany({
+    where: { id: { in: Array.from(reservedAssetIds) } },
+    data: { status: "RESERVED" },
+  });
+
+  const overdueAllocation = await prisma.allocation.create({
+    data: {
+      assetId: overdueAsset.id,
+      employeeId: usersByKey.employeeBackend.id,
+      allocatedById: usersByKey.assetManager.id,
+      status: "ACTIVE",
+      allocatedAt: addDays(today, -18),
+      expectedReturnDate: addDays(today, -2),
+      createdAt: addDays(today, -18),
+      updatedAt: addDays(today, -2),
+    },
+  });
+
+  const upcomingAllocation = await prisma.allocation.create({
+    data: {
+      assetId: upcomingAsset.id,
+      employeeId: usersByKey.employeeFrontend.id,
+      allocatedById: usersByKey.assetManager.id,
+      status: "ACTIVE",
+      allocatedAt: addDays(today, -12),
+      expectedReturnDate: addDays(today, 3),
+      createdAt: addDays(today, -12),
+      updatedAt: addDays(today, -1),
+    },
+  });
+
+  const activeAllocation = await prisma.allocation.create({
+    data: {
+      assetId: activeAsset.id,
+      employeeId: usersByKey.employeeSales.id,
+      allocatedById: usersByKey.assetManager.id,
+      status: "ACTIVE",
+      allocatedAt: addDays(today, -10),
+      expectedReturnDate: addDays(today, 14),
+      createdAt: addDays(today, -10),
+      updatedAt: addDays(today, -3),
+    },
+  });
+
+  await prisma.allocation.create({
+    data: {
+      assetId: departmentAsset.id,
+      departmentId: depts.OPS,
+      allocatedById: usersByKey.assetManager.id,
+      status: "ACTIVE",
+      allocatedAt: addDays(today, -8),
+      expectedReturnDate: addDays(today, 10),
+      createdAt: addDays(today, -8),
+      updatedAt: addDays(today, -2),
+    },
+  });
+
+  const transferAllocation = await prisma.allocation.create({
+    data: {
+      assetId: transferAsset.id,
+      employeeId: usersByKey.employeeOps.id,
+      allocatedById: usersByKey.assetManager.id,
+      status: "ACTIVE",
+      allocatedAt: addDays(today, -6),
+      expectedReturnDate: addDays(today, 8),
+      createdAt: addDays(today, -6),
+      updatedAt: addDays(today, -1),
+    },
+  });
+
+  await prisma.allocation.create({
+    data: {
+      assetId: returnedAsset.id,
+      employeeId: usersByKey.employeeHr.id,
+      allocatedById: usersByKey.assetManager.id,
+      status: "RETURNED",
+      allocatedAt: addDays(today, -30),
+      expectedReturnDate: addDays(today, -9),
+      returnRequestedAt: addDays(today, -8),
+      returnRequestedById: usersByKey.employeeHr.id,
+      returnApprovedById: usersByKey.assetManager.id,
+      returnConditionNotes: "Returned in good condition after onboarding use.",
+      returnedAt: addDays(today, -7),
+      createdAt: addDays(today, -30),
+      updatedAt: addDays(today, -7),
+    },
+  });
+
+  await prisma.transferRequest.createMany({
+    data: [
+      {
+        assetId: transferAsset.id,
+        allocationId: transferAllocation.id,
+        requestedById: usersByKey.employeeOps.id,
+        fromEmployeeId: usersByKey.employeeOps.id,
+        toEmployeeId: usersByKey.employeeDesign.id,
+        reason: "Temporary reassignment for studio event support.",
+        status: "REQUESTED",
+        createdAt: addDays(today, -1),
+        updatedAt: addDays(today, -1),
+      },
+      {
+        assetId: upcomingAsset.id,
+        allocationId: upcomingAllocation.id,
+        requestedById: usersByKey.employeeFrontend.id,
+        fromEmployeeId: usersByKey.employeeFrontend.id,
+        toDepartmentId: depts.OPS,
+        reason: "Needs to move to the operations war room for launch week.",
+        status: "REQUESTED",
+        createdAt: addDays(today, -2),
+        updatedAt: addDays(today, -2),
+      },
+      {
+        assetId: activeAsset.id,
+        allocationId: activeAllocation.id,
+        requestedById: usersByKey.employeeSales.id,
+        fromEmployeeId: usersByKey.employeeSales.id,
+        toEmployeeId: usersByKey.employeeBackend.id,
+        approvedById: usersByKey.assetManager.id,
+        approvedAt: addDays(today, -4),
+        reason: "Approved swap for customer demo preparation.",
+        status: "APPROVED",
+        createdAt: addDays(today, -5),
+        updatedAt: addDays(today, -4),
+      },
+    ],
+  });
+
+  await prisma.booking.createMany({
+    data: [
+      {
+        assetId: bookingMorningAsset.id,
+        bookedById: usersByKey.employeeBackend.id,
+        departmentId: usersByKey.employeeBackend.departmentId,
+        status: "UPCOMING",
+        startTime: addDays(today, 0),
+        endTime: new Date(addDays(today, 0).setHours(10, 30, 0, 0)),
+        purpose: "API handoff review",
+        createdAt: addDays(today, -2),
+        updatedAt: addDays(today, -1),
+      },
+      {
+        assetId: bookingAfternoonAsset.id,
+        bookedById: usersByKey.departmentHead.id,
+        departmentId: usersByKey.departmentHead.departmentId,
+        status: "UPCOMING",
+        startTime: new Date(addDays(today, 0).setHours(14, 0, 0, 0)),
+        endTime: new Date(addDays(today, 0).setHours(15, 0, 0, 0)),
+        purpose: "Department planning session",
+        createdAt: addDays(today, -3),
+        updatedAt: addDays(today, -1),
+      },
+      {
+        assetId: bookingReservedAsset.id,
+        bookedById: usersByKey.employeeOps.id,
+        departmentId: usersByKey.employeeOps.departmentId,
+        status: "ONGOING",
+        startTime: new Date(addDays(today, 0).setHours(11, 0, 0, 0)),
+        endTime: new Date(addDays(today, 0).setHours(12, 30, 0, 0)),
+        purpose: "Vendor coordination call",
+        createdAt: addDays(today, -1),
+        updatedAt: addDays(today, 0),
+      },
+      {
+        assetId: bookingTomorrowAsset.id,
+        bookedById: usersByKey.employeeDesign.id,
+        departmentId: usersByKey.employeeDesign.departmentId,
+        status: "UPCOMING",
+        startTime: new Date(addDays(today, 1).setHours(13, 0, 0, 0)),
+        endTime: new Date(addDays(today, 1).setHours(14, 0, 0, 0)),
+        purpose: "Design review workshop",
+        createdAt: addDays(today, -1),
+        updatedAt: addDays(today, -1),
+      },
+      {
+        assetId: bookingMorningAsset.id,
+        bookedById: usersByKey.employeeHr.id,
+        departmentId: usersByKey.employeeHr.departmentId,
+        status: "COMPLETED",
+        startTime: new Date(addDays(today, -1).setHours(15, 0, 0, 0)),
+        endTime: new Date(addDays(today, -1).setHours(16, 0, 0, 0)),
+        purpose: "Candidate interview panel",
+        createdAt: addDays(today, -4),
+        updatedAt: addDays(today, -1),
+      },
+      {
+        assetId: bookingReservedAsset.id,
+        bookedById: usersByKey.employeeSales.id,
+        departmentId: usersByKey.employeeSales.departmentId,
+        status: "CANCELLED",
+        startTime: new Date(addDays(today, 2).setHours(10, 0, 0, 0)),
+        endTime: new Date(addDays(today, 2).setHours(11, 0, 0, 0)),
+        cancelledAt: addDays(today, -1),
+        purpose: "Cancelled client roadshow slot",
+        createdAt: addDays(today, -3),
+        updatedAt: addDays(today, -1),
+      },
+    ],
+  });
+
+  await prisma.maintenanceRequest.createMany({
+    data: [
+      {
+        assetId: maintenancePendingAsset.id,
+        raisedById: usersByKey.employeeDesign.id,
+        issueDescription: "Display flickering intermittently during presentations.",
+        priority: "HIGH",
+        status: "PENDING",
+        scheduledDate: addDays(today, 1),
+        createdAt: addDays(today, -2),
+        updatedAt: addDays(today, -1),
+      },
+      {
+        assetId: maintenanceInProgressAsset.id,
+        raisedById: usersByKey.employeeBackend.id,
+        issueDescription: "Battery health degraded and system overheats under load.",
+        priority: "CRITICAL",
+        status: "IN_PROGRESS",
+        approvedById: usersByKey.assetManager.id,
+        technicianName: "Rakesh Nair",
+        scheduledDate: today,
+        createdAt: addDays(today, -4),
+        updatedAt: addDays(today, 0),
+      },
+      {
+        assetId: maintenanceResolvedAsset.id,
+        raisedById: usersByKey.employeeOps.id,
+        issueDescription: "Wheel alignment and brake inspection completed.",
+        priority: "MEDIUM",
+        status: "RESOLVED",
+        approvedById: usersByKey.assetManager.id,
+        technicianName: "Sanjay Motors",
+        scheduledDate: addDays(today, -6),
+        resolvedAt: addDays(today, -4),
+        resolutionNotes: "Replaced brake pads and cleared the service checklist.",
+        createdAt: addDays(today, -8),
+        updatedAt: addDays(today, -4),
+      },
+    ],
+  });
+
+  const inProgressAudit = await prisma.auditCycle.create({
+    data: {
+      name: "Engineering Mid-Quarter Audit",
+      status: "IN_PROGRESS",
+      departmentId: depts.ENG,
+      location: "HQ Floor 3",
+      startDate: addDays(today, -1),
+      endDate: addDays(today, 3),
+      createdById: usersByKey.admin.id,
+      createdAt: addDays(today, -2),
+      updatedAt: addDays(today, 0),
+    },
+  });
+
+  const closedAudit = await prisma.auditCycle.create({
+    data: {
+      name: "Operations Vehicle Audit",
+      status: "CLOSED",
+      departmentId: depts.OPS,
+      location: "Basement Parking",
+      startDate: addDays(today, -20),
+      endDate: addDays(today, -17),
+      createdById: usersByKey.admin.id,
+      closedById: usersByKey.assetManager.id,
+      closedAt: addDays(today, -16),
+      createdAt: addDays(today, -21),
+      updatedAt: addDays(today, -16),
+    },
+  });
+
+  await prisma.auditAssignment.createMany({
+    data: [
+      {
+        auditCycleId: inProgressAudit.id,
+        auditorId: usersByKey.departmentHead.id,
+        createdAt: addDays(today, -2),
+      },
+      {
+        auditCycleId: inProgressAudit.id,
+        auditorId: usersByKey.employeeOps.id,
+        createdAt: addDays(today, -2),
+      },
+    ],
+  });
+
+  await prisma.auditItem.createMany({
+    data: [
+      {
+        auditCycleId: inProgressAudit.id,
+        assetId: auditMissingAsset.id,
+        verification: "MISSING",
+        expectedLocation: "HQ Floor 3 - Engineering Bay",
+        notes: "Asset was not found during floor sweep.",
+        verifiedById: usersByKey.departmentHead.id,
+        verifiedAt: addDays(today, 0),
+        createdAt: addDays(today, -1),
+        updatedAt: addDays(today, 0),
+      },
+      {
+        auditCycleId: inProgressAudit.id,
+        assetId: auditDamagedAsset.id,
+        verification: "DAMAGED",
+        expectedLocation: "HQ Floor 3 - Engineering Bay",
+        notes: "Visible casing damage; follow-up maintenance needed.",
+        verifiedById: usersByKey.employeeOps.id,
+        verifiedAt: addDays(today, 0),
+        createdAt: addDays(today, -1),
+        updatedAt: addDays(today, 0),
+      },
+      {
+        auditCycleId: inProgressAudit.id,
+        assetId: auditVerifiedAsset.id,
+        verification: "VERIFIED",
+        expectedLocation: "HQ Floor 3 - Engineering Bay",
+        notes: "Matched tag and location.",
+        verifiedById: usersByKey.departmentHead.id,
+        verifiedAt: addDays(today, 0),
+        createdAt: addDays(today, -1),
+        updatedAt: addDays(today, 0),
+      },
+      {
+        auditCycleId: closedAudit.id,
+        assetId: maintenanceResolvedAsset.id,
+        verification: "VERIFIED",
+        expectedLocation: "Basement Parking - B-04",
+        notes: "Vehicle verified and audit closed.",
+        verifiedById: usersByKey.employeeOps.id,
+        verifiedAt: addDays(today, -17),
+        createdAt: addDays(today, -20),
+        updatedAt: addDays(today, -17),
+      },
+    ],
+  });
+
+  await prisma.notification.createMany({
+    data: [
+      {
+        userId: usersByKey.admin.id,
+        type: "OVERDUE_RETURN",
+        title: "Overdue asset requires follow-up",
+        message: `${overdueAsset.name} is overdue with ${usersByKey.employeeBackend.name}.`,
+        link: "/allocations",
+        isRead: false,
+        createdAt: addDays(today, 0),
+      },
+      {
+        userId: usersByKey.admin.id,
+        type: "AUDIT_DISCREPANCY",
+        title: "Audit discrepancy recorded",
+        message: `${auditMissingAsset.name} was marked missing in Engineering Mid-Quarter Audit.`,
+        link: "/audit",
+        isRead: false,
+        createdAt: addDays(today, 0),
+      },
+      {
+        userId: usersByKey.assetManager.id,
+        type: "MAINTENANCE_APPROVED",
+        title: "Service work moved to in progress",
+        message: `${maintenanceInProgressAsset.name} is currently assigned to Rakesh Nair.`,
+        link: "/maintenance",
+        isRead: false,
+        createdAt: addDays(today, 0),
+      },
+      {
+        userId: usersByKey.assetManager.id,
+        type: "TRANSFER_APPROVED",
+        title: "Transfer queue updated",
+        message: "Two transfer requests are waiting for approval.",
+        link: "/allocations/transfers",
+        isRead: false,
+        createdAt: addDays(today, -1),
+      },
+      {
+        userId: usersByKey.departmentHead.id,
+        type: "BOOKING_CONFIRMED",
+        title: "Department booking confirmed",
+        message: `${bookingAfternoonAsset.name} is booked for the planning session today.`,
+        link: "/resource-booking",
+        isRead: false,
+        createdAt: addDays(today, -1),
+      },
+      {
+        userId: usersByKey.employeeBackend.id,
+        type: "OVERDUE_RETURN",
+        title: "Return overdue",
+        message: `Please return ${overdueAsset.name} as soon as possible.`,
+        link: "/resources",
+        isRead: false,
+        createdAt: addDays(today, 0),
+      },
+      {
+        userId: usersByKey.employeeFrontend.id,
+        type: "TRANSFER_APPROVED",
+        title: "Transfer request submitted",
+        message: `Your transfer request for ${upcomingAsset.name} is pending approval.`,
+        link: "/allocations/transfers",
+        isRead: false,
+        createdAt: addDays(today, -2),
+      },
+      {
+        userId: usersByKey.employeeOps.id,
+        type: "BOOKING_REMINDER",
+        title: "Booking in progress",
+        message: `${bookingReservedAsset.name} is reserved for your vendor coordination slot.`,
+        link: "/resource-booking",
+        isRead: true,
+        createdAt: addDays(today, 0),
+      },
+    ],
+  });
+
+  await prisma.activityLog.createMany({
+    data: [
+      {
+        actorId: usersByKey.assetManager.id,
+        action: "ASSET_ALLOCATED",
+        entityType: "Allocation",
+        entityId: overdueAllocation.id,
+        metadata: { assetName: overdueAsset.name, assignee: usersByKey.employeeBackend.name },
+        createdAt: addDays(today, -18),
+      },
+      {
+        actorId: usersByKey.employeeFrontend.id,
+        action: "TRANSFER_REQUESTED",
+        entityType: "TransferRequest",
+        entityId: upcomingAllocation.id,
+        metadata: { assetName: upcomingAsset.name },
+        createdAt: addDays(today, -2),
+      },
+      {
+        actorId: usersByKey.employeeBackend.id,
+        action: "BOOKING_CREATED",
+        entityType: "Booking",
+        entityId: bookingMorningAsset.id,
+        metadata: { assetName: bookingMorningAsset.name, purpose: "API handoff review" },
+        createdAt: addDays(today, -2),
+      },
+      {
+        actorId: usersByKey.employeeDesign.id,
+        action: "MAINTENANCE_REQUESTED",
+        entityType: "MaintenanceRequest",
+        entityId: maintenancePendingAsset.id,
+        metadata: { assetName: maintenancePendingAsset.name, priority: "HIGH" },
+        createdAt: addDays(today, -2),
+      },
+      {
+        actorId: usersByKey.departmentHead.id,
+        action: "AUDIT_ITEM_SUBMITTED",
+        entityType: "AuditItem",
+        entityId: auditMissingAsset.id,
+        metadata: { assetName: auditMissingAsset.name, result: "MISSING" },
+        createdAt: addDays(today, 0),
+      },
+      {
+        actorId: usersByKey.admin.id,
+        action: "NOTIFICATION_SENT",
+        entityType: "Notification",
+        entityId: usersByKey.employeeBackend.id,
+        metadata: { type: "OVERDUE_RETURN" },
+        createdAt: addDays(today, 0),
+      },
+    ],
+  });
+
+  console.log("  ✔ Demo workflow data ready");
+  console.log(`  ↳ Admin login: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`);
+  console.log(`  ↳ Demo login: ${usersByKey.assetManager.email} / ${DEMO_PASSWORD}`);
   console.log("✅  Seed complete!");
 }
 
