@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
@@ -24,6 +24,7 @@ type LoginValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [formError, setFormError] = useState<string | null>(null);
 
   const { control, handleSubmit, formState } = useForm<LoginValues>({
@@ -47,9 +48,11 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/");
-    router.refresh();
+    const next = searchParams.get("next");
+    const destination = next && next.startsWith("/") ? next : "/";
+    window.location.assign(destination);
   }
+
 
   return (
     <AuthCard
