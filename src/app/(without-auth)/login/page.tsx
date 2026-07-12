@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
@@ -22,8 +22,7 @@ import {
 
 type LoginValues = z.infer<typeof loginSchema>;
 
-export default function LoginPage() {
-  const router = useRouter();
+function LoginForm() {
   const searchParams = useSearchParams();
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -52,7 +51,6 @@ export default function LoginPage() {
     const destination = next && next.startsWith("/") ? next : "/";
     window.location.assign(destination);
   }
-
 
   return (
     <AuthCard
@@ -126,5 +124,13 @@ export default function LoginPage() {
         </FieldGroup>
       </form>
     </AuthCard>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }
