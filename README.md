@@ -1,36 +1,98 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AssetFlow
+
+Enterprise Asset & Resource Management System — a centralized ERP platform for tracking, allocating, and maintaining physical assets and shared resources (equipment, furniture, vehicles, rooms) across any organization.
+
+## Team Members
+
+| Name          |
+| ------------- |
+| Ansh Mehta    |
+| Vivek Panchal |
+| Aryan Mishra  |
+
+## Tech Stack
+
+- [Next.js 16](https://nextjs.org) (App Router, Turbopack)
+- [Prisma 7](https://www.prisma.io) + PostgreSQL
+- [shadcn/ui](https://ui.shadcn.com) (base-ui) + Tailwind CSS v4
+- React Hook Form + Zod
+- JWT sessions via [jose](https://github.com/panva/jose)
 
 ## Getting Started
 
-First, run the development server:
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Configure environment variables
+
+Copy `.env.example` to `.env` and fill in the values:
+
+```bash
+cp .env.example .env
+```
+
+```bash
+# .env
+DATABASE_URL=            # PostgreSQL connection string
+
+ADMIN_NAME=               # used by the db seed to create the first Admin account
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
+
+SESSION_SECRET=           # random secret used to sign session JWTs
+```
+
+Generate a `SESSION_SECRET` with:
+
+```bash
+openssl rand -base64 32
+```
+
+### 3. Apply database migrations
+
+Migrations are already committed to the repo, so just apply them - don't use `migrate dev` here, that's only for authoring a *new* migration:
+
+```bash
+npx prisma migrate deploy
+```
+
+### 4. Generate the Prisma client
+
+```bash
+npx prisma generate
+```
+
+### 5. Seed the database
+
+Seeding creates the first Admin account from `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env`. All other accounts sign up as Employees and get promoted by this Admin from the Employee Directory.
+
+```bash
+npx prisma db seed
+```
+
+(equivalent to `npm run seed`)
+
+### 6. Start the dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Useful Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Command                   | Description                                   |
+| -------------------------- | ---------------------------------------------- |
+| `npm run dev`               | Start the dev server                          |
+| `npm run build`             | Production build                              |
+| `npm run start`             | Start the production server                   |
+| `npm run lint`               | Run ESLint                                    |
+| `npx prisma studio`         | Browse the database in a GUI                  |
+| `npx prisma migrate deploy` | Apply existing migrations (use on a fresh DB) |
+| `npx prisma migrate dev`    | Author a new migration after editing `schema.prisma` |
+| `npx prisma db seed`         | Re-run the seed script                        |
+| `npx prisma generate`        | Regenerate the Prisma client                  |
