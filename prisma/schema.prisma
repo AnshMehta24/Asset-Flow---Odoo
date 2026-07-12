@@ -97,6 +97,13 @@ enum AuditVerificationStatus {
   DAMAGED
 }
 
+enum AuditDiscrepancyStatus {
+  OPEN
+  CONFIRMED
+  RESOLVED
+  DISMISSED
+}
+
 enum NotificationType {
   ASSET_ASSIGNED
   MAINTENANCE_APPROVED
@@ -107,6 +114,8 @@ enum NotificationType {
   TRANSFER_APPROVED
   OVERDUE_RETURN
   AUDIT_DISCREPANCY
+  AUDIT_ASSIGNED
+  AUDIT_CLOSED
 }
 
 model User {
@@ -134,9 +143,11 @@ model User {
   maintenanceRequestsRaised   MaintenanceRequest[] @relation("MaintenanceRaisedBy")
   maintenanceRequestsApproved MaintenanceRequest[] @relation("MaintenanceApprovedBy")
   auditCyclesCreated          AuditCycle[]         @relation("AuditCreatedBy")
+  auditCyclesStarted          AuditCycle[]         @relation("AuditStartedBy")
   auditCyclesClosed           AuditCycle[]         @relation("AuditClosedBy")
   auditAssignments            AuditAssignment[]
   auditItemsVerified          AuditItem[]          @relation("AuditVerifiedBy")
+  auditItemsResolved          AuditItem[]          @relation("AuditResolvedBy")
   notifications               Notification[]
   activityLogs                ActivityLog[]
 
@@ -379,6 +390,9 @@ model AuditCycle {
   endDate      DateTime          @db.Date
   createdById  String
   createdBy    User              @relation("AuditCreatedBy", fields: [createdById], references: [id])
+  startedById  String?
+  startedBy    User?             @relation("AuditStartedBy", fields: [startedById], references: [id])
+  startedAt    DateTime?
   closedById   String?
   closedBy     User?             @relation("AuditClosedBy", fields: [closedById], references: [id])
   closedAt     DateTime?
@@ -389,6 +403,7 @@ model AuditCycle {
 
   @@index([departmentId])
   @@index([status])
+  @@index([startedById])
 }
 
 model AuditAssignment {
@@ -403,22 +418,31 @@ model AuditAssignment {
 }
 
 model AuditItem {
-  id               String                  @id @default(cuid())
-  verification     AuditVerificationStatus @default(PENDING)
-  auditCycleId     String
-  auditCycle       AuditCycle              @relation(fields: [auditCycleId], references: [id])
-  assetId          String
-  asset            Asset                   @relation(fields: [assetId], references: [id])
-  expectedLocation String?
-  notes            String?
-  verifiedById     String?
-  verifiedBy       User?                   @relation("AuditVerifiedBy", fields: [verifiedById], references: [id])
-  verifiedAt       DateTime?
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
+  id                  String                   @id @default(cuid())
+  verification        AuditVerificationStatus  @default(PENDING)
+  discrepancyStatus   AuditDiscrepancyStatus?
+  auditCycleId        String
+  auditCycle          AuditCycle               @relation(fields: [auditCycleId], references: [id])
+  assetId             String
+  asset               Asset                    @relation(fields: [assetId], references: [id])
+  expectedLocation    String?
+  observedLocation    String?
+  notes               String?
+  verifiedById        String?
+  verifiedBy          User?                    @relation("AuditVerifiedBy", fields: [verifiedById], references: [id])
+  verifiedAt          DateTime?
+  resolutionNotes     String?
+  resolvedById        String?
+  resolvedBy          User?                    @relation("AuditResolvedBy", fields: [resolvedById], references: [id])
+  resolvedAt          DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
 
   @@unique([auditCycleId, assetId])
-  @@index([verification])
+  @@index([auditCycleId, verification])
+  @@index([auditCycleId, discrepancyStatus])
+  @@index([verifiedById])
+  @@index([resolvedById])
 }
 
 model Notification {
