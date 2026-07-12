@@ -1,131 +1,80 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Calendar, Building, MapPin, Loader2, ArrowLeft, Users } from "lucide-react";
 
-interface Department {
-  id: string;
-  name: string;
-  code: string;
-}
+import { upsertAuditCycle, previewAuditScope } from "../actions";
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
+type Department = { id: string; name: string; code: string };
+type FormUser = { id: string; name: string; email: string; role: string };
 
-interface AuditCycleFormProps {
-  auditId?: string; // If passed, we are in Edit mode
+type Props = {
+  departments: Department[];
+  users: FormUser[];
+  auditId?: string;
   initialData?: {
     name: string;
     departmentId: string | null;
     location: string | null;
-    startDate: string;
-    endDate: string;
+    startDate: Date;
+    endDate: Date;
     auditorIds: string[];
   };
-}
+};
 
-export function AuditCycleForm({ auditId, initialData }: AuditCycleFormProps) {
+export function AuditCycleForm({ departments, users, auditId, initialData }: Props) {
   const router = useRouter();
   const isEdit = !!auditId;
+  const [isSubmitting, startSubmitTransition] = useTransition();
 
-  // Form Fields State
-  const [name, setName] = useState(initialData?.name || "");
-  const [departmentId, setDepartmentId] = useState(initialData?.departmentId || "");
-  const [location, setLocation] = useState(initialData?.location || "");
+  const [name, setName] = useState(initialData?.name ?? "");
+  const [departmentId, setDepartmentId] = useState(initialData?.departmentId ?? "");
+  const [location, setLocation] = useState(initialData?.location ?? "");
   const [startDate, setStartDate] = useState(
-    initialData?.startDate ? new Date(initialData.startDate).toISOString().split("T")[0] : ""
+    initialData?.startDate ? initialData.startDate.toISOString().split("T")[0] : ""
   );
   const [endDate, setEndDate] = useState(
-    initialData?.endDate ? new Date(initialData.endDate).toISOString().split("T")[0] : ""
+    initialData?.endDate ? initialData.endDate.toISOString().split("T")[0] : ""
   );
-  const [selectedAuditors, setSelectedAuditors] = useState<string[]>(initialData?.auditorIds || []);
+  const [selectedAuditors, setSelectedAuditors] = useState<string[]>(initialData?.auditorIds ?? []);
 
-  // Dropdown lists
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-
-  // Preview matching assets count
   const [assetCount, setAssetCount] = useState<number | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const debounceRef = useRef<number | null>(null);
 
-  // Fetch departments & users list
   useEffect(() => {
-    const loadDropdowns = async () => {
-      try {
-        const [deptsRes, usersRes] = await Promise.all([
-          fetch("/api/departments"),
-          fetch("/api/users"),
-        ]);
+    if (!departmentId && !location.trim()) {
+      setAssetCount(null);
+      return;
+    }
 
-        if (deptsRes.ok) {
-          const deptsData = await deptsRes.json();
-          setDepartments(deptsData);
-        }
-
-        if (usersRes.ok) {
-          const usersData = await usersRes.json();
-          setUsers(usersData);
-        }
-      } catch (err) {
-        toast.error("Failed to load select options.");
-      }
-    };
-
-    loadDropdowns();
-  }, []);
-
-  // Fetch matching assets count preview on scope changes
-  useEffect(() => {
-    const getPreviewCount = async () => {
-      // Do not fetch preview unless at least one scope indicator is selected
-      if (!departmentId && !location.trim()) {
-        setAssetCount(null);
-        return;
-      }
-
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(async () => {
       setIsPreviewLoading(true);
-      try {
-        const res = await fetch("/api/audits/preview", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            departmentId: departmentId || null,
-            location: location.trim() || null,
-          }),
-        });
-
-        if (res.ok) {
-          const result = await res.json();
-          setAssetCount(result.data.assetCount);
-        }
-      } catch (err) {
-        console.error("Preview count error:", err);
-      } finally {
-        setIsPreviewLoading(false);
+      const result = await previewAuditScope({
+        departmentId: departmentId || null,
+        location: location.trim() || null,
+      });
+      if (result.success) {
+        setAssetCount(result.data.assetCount);
       }
+      setIsPreviewLoading(false);
+    }, 400);
+
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-
-    const delayDebounceFn = setTimeout(() => {
-      getPreviewCount();
-    }, 400); // Debounce to avoid constant API hits during typing
-
-    return () => clearTimeout(delayDebounceFn);
   }, [departmentId, location]);
 
-  const handleAuditorToggle = (userId: string) => {
+  function handleAuditorToggle(userId: string) {
     setSelectedAuditors((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     );
-  };
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     if (!name.trim()) {
@@ -153,46 +102,30 @@ export function AuditCycleForm({ auditId, initialData }: AuditCycleFormProps) {
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      const payload = {
-        name: name.trim(),
-        departmentId: departmentId || null,
-        location: location.trim() || null,
-        startDate: new Date(startDate).toISOString(),
-        endDate: new Date(endDate).toISOString(),
-        auditorIds: selectedAuditors,
-      };
+    const payload = {
+      name: name.trim(),
+      departmentId: departmentId || null,
+      location: location.trim() || null,
+      startDate,
+      endDate,
+      auditorIds: selectedAuditors,
+    };
 
-      const url = isEdit ? `/api/audits/${auditId}` : "/api/audits";
-      const method = isEdit ? "PATCH" : "POST";
+    startSubmitTransition(async () => {
+      const result = await upsertAuditCycle(payload, auditId);
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        const result = await res.json();
-        const cycleId = isEdit ? auditId : result.data.id;
+      if (result.success) {
         toast.success(isEdit ? "Audit updated successfully." : "Audit cycle created successfully.");
-        router.push(`/audits/${cycleId}`);
+        router.push(`/audits/${result.data.id}`);
         router.refresh();
       } else {
-        const errData = await res.json();
-        toast.error(errData.error || "Failed to submit form.");
+        toast.error(result.error);
       }
-    } catch (err) {
-      toast.error("An unexpected error occurred.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    });
+  }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl bg-card border border-border rounded-xl p-6 shadow-sm">
-      {/* Name field */}
+    <form onSubmit={handleSubmit} className="space-y-6 w-full bg-card border border-border rounded-xl p-6 shadow-sm">
       <div className="space-y-2">
         <label className="text-sm font-bold text-card-foreground">Audit Cycle Name</label>
         <input
@@ -205,9 +138,7 @@ export function AuditCycleForm({ auditId, initialData }: AuditCycleFormProps) {
         />
       </div>
 
-      {/* Scope Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Department select */}
         <div className="space-y-2">
           <label className="text-sm font-bold text-card-foreground flex items-center gap-1.5">
             <Building size={14} />
@@ -227,7 +158,6 @@ export function AuditCycleForm({ auditId, initialData }: AuditCycleFormProps) {
           </select>
         </div>
 
-        {/* Location text */}
         <div className="space-y-2">
           <label className="text-sm font-bold text-card-foreground flex items-center gap-1.5">
             <MapPin size={14} />
@@ -243,7 +173,6 @@ export function AuditCycleForm({ auditId, initialData }: AuditCycleFormProps) {
         </div>
       </div>
 
-      {/* Scope Preview alert */}
       {(departmentId || location.trim()) && (
         <div className="p-4 rounded-lg bg-accent/5 border border-border text-xs">
           {isPreviewLoading ? (
@@ -264,9 +193,7 @@ export function AuditCycleForm({ auditId, initialData }: AuditCycleFormProps) {
         </div>
       )}
 
-      {/* Date Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Start Date */}
         <div className="space-y-2">
           <label className="text-sm font-bold text-card-foreground flex items-center gap-1.5">
             <Calendar size={14} />
@@ -281,7 +208,6 @@ export function AuditCycleForm({ auditId, initialData }: AuditCycleFormProps) {
           />
         </div>
 
-        {/* End Date */}
         <div className="space-y-2">
           <label className="text-sm font-bold text-card-foreground flex items-center gap-1.5">
             <Calendar size={14} />
@@ -297,7 +223,6 @@ export function AuditCycleForm({ auditId, initialData }: AuditCycleFormProps) {
         </div>
       </div>
 
-      {/* Auditors checklist selection */}
       <div className="space-y-2">
         <label className="text-sm font-bold text-card-foreground flex items-center gap-1.5">
           <Users size={14} />
@@ -331,7 +256,6 @@ export function AuditCycleForm({ auditId, initialData }: AuditCycleFormProps) {
         </div>
       </div>
 
-      {/* Action buttons */}
       <div className="flex items-center gap-3 pt-4 border-t border-border/50 justify-end">
         <button
           type="button"

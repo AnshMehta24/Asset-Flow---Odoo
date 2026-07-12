@@ -1,59 +1,42 @@
-"use client";
-
-import React, { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
-import { AuditCycleForm } from "@/components/audits/audit-cycle-form";
-import { ChevronLeft, FolderSync } from "lucide-react";
 import Link from "next/link";
-import { toast } from "sonner";
+import { notFound, redirect } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 
-interface InitialData {
-  name: string;
-  departmentId: string | null;
-  location: string | null;
-  startDate: string;
-  endDate: string;
-  auditorIds: string[];
-}
+import prisma from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth/user";
+import { canEditAudit } from "@/lib/audits/audit.permissions";
+import { getAuditFormOptions } from "../../_lib/audit-data";
+import { AuditCycleForm } from "../../_components/audit-cycle-form";
 
-export default function EditAuditCyclePage() {
-  const params = useParams();
-  const auditId = params.auditId as string;
-  const [initialData, setInitialData] = useState<InitialData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export const metadata = {
+  title: "Edit Audit Cycle — AssetFlow",
+};
 
-  useEffect(() => {
-    const fetchAudit = async () => {
-      try {
-        const res = await fetch(`/api/audits/${auditId}`);
-        if (res.ok) {
-          const data = await res.json();
-          const { audit } = data;
-          
-          setInitialData({
-            name: audit.name,
-            departmentId: audit.departmentId,
-            location: audit.location,
-            startDate: audit.startDate,
-            endDate: audit.endDate,
-            auditorIds: audit.auditors.map((a: any) => a.auditorId),
-          });
-        } else {
-          toast.error("Failed to load audit cycle details.");
-        }
-      } catch (err) {
-        toast.error("An error occurred loading audit details.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+export default async function EditAuditCyclePage({
+  params,
+}: {
+  params: Promise<{ auditId: string }>;
+}) {
+  const { auditId } = await params;
 
-    if (auditId) fetchAudit();
-  }, [auditId]);
+  const user = await getCurrentUser();
+  if (!user) redirect("/audits");
+
+  const cycle = await prisma.auditCycle.findUnique({
+    where: { id: auditId },
+    include: { auditors: { select: { auditorId: true } } },
+  });
+
+  if (!cycle) notFound();
+
+  if (!canEditAudit(user, cycle)) {
+    redirect(`/audits/${auditId}`);
+  }
+
+  const { departments, users } = await getAuditFormOptions();
 
   return (
-    <div className="flex-1 p-6 space-y-6 max-w-4xl w-full mx-auto">
-      {/* Back button */}
+    <div className="flex flex-col gap-6 max-w-5xl w-full">
       <div>
         <Link
           href={`/audits/${auditId}`}
@@ -69,20 +52,21 @@ export default function EditAuditCyclePage() {
         <p className="text-xs text-muted-foreground mt-0.5">Modify planned verification settings and scopes</p>
       </div>
 
-      {isLoading ? (
-        <div className="py-20 flex flex-col items-center justify-center text-muted-foreground">
-          <FolderSync size={28} className="animate-spin text-primary" />
-          <p className="text-xs font-semibold mt-2">Loading cycle details...</p>
-        </div>
-      ) : initialData ? (
-        <div className="pt-2">
-          <AuditCycleForm auditId={auditId} initialData={initialData} />
-        </div>
-      ) : (
-        <div className="py-16 text-center text-muted-foreground">
-          <p className="text-sm">Audit cycle not found or you do not have permission to edit it.</p>
-        </div>
-      )}
+      <div className="pt-2">
+        <AuditCycleForm
+          departments={departments}
+          users={users}
+          auditId={auditId}
+          initialData={{
+            name: cycle.name,
+            departmentId: cycle.departmentId,
+            location: cycle.location,
+            startDate: cycle.startDate,
+            endDate: cycle.endDate,
+            auditorIds: cycle.auditors.map((a) => a.auditorId),
+          }}
+        />
+      </div>
     </div>
   );
 }

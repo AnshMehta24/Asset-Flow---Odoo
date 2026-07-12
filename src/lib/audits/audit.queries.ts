@@ -18,7 +18,7 @@ export function buildAuditAssetWhere(scope: AuditScopeInput): Prisma.AssetWhereI
 
   if (scope.location) {
     conditions.location = {
-      equals: scope.location,
+      contains: scope.location,
       mode: "insensitive",
     };
   }
