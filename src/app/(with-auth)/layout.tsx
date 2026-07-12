@@ -9,7 +9,7 @@ export default async function WithAuthLayout({
   const user = await requireCurrentUser();
 
   if (!user) {
-    redirect("/login");
+    redirect("/api/auth/logout");
   }
 
   return children;

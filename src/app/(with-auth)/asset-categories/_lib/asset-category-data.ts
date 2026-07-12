@@ -1,0 +1,69 @@
+import prisma from "@/lib/prisma";
+
+export async function getAssetCategoryList(search?: string) {
+  const query = search?.trim();
+
+  return prisma.assetCategory.findMany({
+    where: query
+      ? {
+          OR: [
+            {
+              name: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+            {
+              description: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+          ],
+        }
+      : undefined,
+    orderBy: {
+      name: "asc",
+    },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      customFields: {
+        select: {
+          id: true,
+        },
+      },
+      _count: {
+        select: {
+          assets: true,
+        },
+      },
+    },
+  });
+}
+
+export async function getAssetCategoryById(id: string) {
+  return prisma.assetCategory.findUnique({
+    where: {
+      id,
+    },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      customFields: {
+        orderBy: {
+          sortOrder: "asc",
+        },
+        select: {
+          id: true,
+          key: true,
+          fieldType: true,
+          enumOptions: true,
+          sortOrder: true,
+        },
+      },
+    },
+  });
+}
