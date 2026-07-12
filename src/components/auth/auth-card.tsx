@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 import {
   Card,
   CardContent,
@@ -21,9 +22,14 @@ export function AuthCard({
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-16">
       <div className="flex w-full max-w-sm flex-col items-center gap-6">
-        <div className="flex size-12 items-center justify-center rounded-full border border-border text-sm font-semibold">
-          AF
-        </div>
+        <Image
+          src="/assetflow.png"
+          alt="AssetFlow"
+          width={1536}
+          height={1024}
+          priority
+          className="h-12 w-auto rounded-lg"
+        />
 
         <Card className="w-full">
           <CardHeader>

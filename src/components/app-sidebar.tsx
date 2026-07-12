@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -57,13 +58,17 @@ export function AppSidebar({ user }: { user: AuthenticatedUser }) {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-1.5">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold">
+        <div className="flex items-center px-2 pt-2">
+          <div className="hidden size-7 shrink-0 items-center justify-center rounded-full border border-border text-xs font-semibold group-data-[collapsible=icon]:flex">
             AF
           </div>
-          <span className="text-sm font-semibold group-data-[collapsible=icon]:hidden">
-            AssetFlow
-          </span>
+          <Image
+            src="/assetflow.png"
+            alt="AssetFlow"
+            width={500}
+            height={500}
+            className="h-auto w-25 rounded-md group-data-[collapsible=icon]:hidden"
+          />
         </div>
       </SidebarHeader>
 
