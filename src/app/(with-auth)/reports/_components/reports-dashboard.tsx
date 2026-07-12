@@ -1,17 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import {
-  formatSequenceNo,
-  getDepartmentUtilization,
-  getMaintenanceFrequency,
-  getMostUsedAssets,
-  getIdleAssets,
-  getOperationalAlerts,
-  getBookingHeatmap,
-  getDepartmentAllocationSummary,
-  mockAssets
-} from "@/lib/dummy-data";
+import type { ReportsData } from "../_lib/reports-data";
 import {
   BarChart3,
   TrendingUp,
@@ -29,28 +19,29 @@ import {
   Heart
 } from "lucide-react";
 
-export default function ReportsPage() {
+const NEARING_RETIREMENT_DISPLAY_YEARS = 6;
+
+export function ReportsDashboard({ data }: { data: ReportsData }) {
   const [dateRange, setDateRange] = useState("Last 30 Days");
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
   const [hoveredBar, setHoveredBar] = useState<number | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ day: string; timeSlot: string } | null>(null);
 
-  // Memoize data calculations
-  const deptUtilization = useMemo(() => getDepartmentUtilization(), []);
-  const maintFrequency = useMemo(() => getMaintenanceFrequency(), []);
-  const mostUsed = useMemo(() => getMostUsedAssets(), []);
-  const idleAssets = useMemo(() => getIdleAssets(), []);
-  const alerts = useMemo(() => getOperationalAlerts(), []);
-  const heatmap = useMemo(() => getBookingHeatmap(), []);
-  const deptSummary = useMemo(() => getDepartmentAllocationSummary(), []);
-
-  // Compute top-level summary metrics
-  const totalAssets = mockAssets.length;
-  const activeAllocations = mockAssets.filter((a) => a.status === "ALLOCATED").length;
-  const allocationRate = totalAssets > 0 ? Math.round((activeAllocations / totalAssets) * 100) : 0;
-  const pendingMaintenance = mockAssets.filter((a) => a.status === "UNDER_MAINTENANCE").length;
-  const totalValue = mockAssets.reduce((sum, a) => sum + Number(a.acquisitionCost || 0), 0);
+  const {
+    totalAssets,
+    activeAllocations,
+    allocationRate,
+    pendingMaintenance,
+    totalValue,
+    deptUtilization,
+    maintFrequency,
+    mostUsed,
+    idleAssets,
+    alerts,
+    heatmap,
+    deptSummary,
+  } = data;
 
   // Helper to format currency
   const formatCurrency = (val: number) => {
@@ -148,7 +139,7 @@ export default function ReportsPage() {
   }, [linePoints, splinePath]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans antialiased">
+    <div className="flex flex-col">
       {/* Top Header */}
       <header className="h-16 flex items-center justify-between px-6 border-b border-border bg-card/85 backdrop-blur-md sticky top-0 z-30">
         <div>
@@ -213,14 +204,14 @@ export default function ReportsPage() {
 
       {/* Dashboard Content Container */}
       <main className="flex-1 p-6 space-y-6 max-w-7xl w-full mx-auto">
-        
+
         {/* Top KPI Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-card border border-border rounded-xl p-5 flex items-center justify-between hover:border-accent-foreground/20 transition-all hover:bg-accent/5 group">
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Assets</p>
               <h3 className="text-2xl font-bold text-card-foreground mt-1 group-hover:text-primary transition-colors">{totalAssets}</h3>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Across 5 departments</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Across {deptSummary.length} departments</p>
             </div>
             <div className="w-12 h-12 rounded-lg bg-accent text-accent-foreground flex items-center justify-center border border-border">
               <Package size={22} />
@@ -263,7 +254,7 @@ export default function ReportsPage() {
 
         {/* Interactive Charts Row (Utilization vs Maintenance) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
+
           {/* SVG Department Utilization Bar Chart */}
           <div className="bg-card border border-border rounded-xl p-6 flex flex-col relative overflow-hidden">
             <div className="flex items-center justify-between mb-4">
@@ -282,7 +273,7 @@ export default function ReportsPage() {
 
             {/* Chart Area */}
             <div className="h-60 flex items-end justify-between relative mt-4 pt-4 border-b border-border px-2">
-              
+
               {/* Horizontal Guide lines */}
               <div className="absolute inset-x-0 top-0 border-t border-border/30 h-0" />
               <div className="absolute inset-x-0 top-1/4 border-t border-border/30 h-0" />
@@ -478,7 +469,7 @@ export default function ReportsPage() {
 
         {/* Most Used vs Idle Assets row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
+
           {/* Most Used Assets */}
           <div className="bg-card border border-border rounded-xl p-6">
             <h3 className="text-sm font-bold text-card-foreground mb-4 flex items-center gap-2">
@@ -486,22 +477,25 @@ export default function ReportsPage() {
               <span>Most used assets</span>
             </h3>
             <div className="divide-y divide-border/40">
-              {mostUsed.map((asset) => (
-                <div key={asset.assetId} className="py-3 flex items-center justify-between hover:bg-muted/30 px-2 rounded-lg transition-colors group">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center border border-border font-mono text-[10px] text-muted-foreground">
-                      {asset.tagNumberFormatted}
+              {mostUsed.length === 0 ? (
+                <p className="py-6 text-center text-xs text-muted-foreground">No bookings recorded yet.</p>
+              ) : (
+                mostUsed.map((asset) => (
+                  <div key={asset.assetId} className="py-3 flex items-center justify-between hover:bg-muted/30 px-2 rounded-lg transition-colors group">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center border border-border font-mono text-[10px] text-muted-foreground">
+                        {asset.tagNumberFormatted}
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-card-foreground group-hover:text-primary transition-colors">{asset.assetName}</h4>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-card-foreground group-hover:text-primary transition-colors">{asset.assetName}</h4>
-                      <p className="text-xs text-muted-foreground">Resource Category: IT/Facilities</p>
-                    </div>
+                    <span className="px-3 py-1 text-xs rounded-full bg-secondary border border-border text-secondary-foreground font-semibold">
+                      {asset.detail}
+                    </span>
                   </div>
-                  <span className="px-3 py-1 text-xs rounded-full bg-secondary border border-border text-secondary-foreground font-semibold">
-                    {asset.detail}
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -512,90 +506,99 @@ export default function ReportsPage() {
               <span>Idle assets</span>
             </h3>
             <div className="divide-y divide-border/40">
-              {idleAssets.map((asset) => (
-                <div key={asset.assetId} className="py-3 flex items-center justify-between hover:bg-muted/30 px-2 rounded-lg transition-colors group">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center border border-border font-mono text-[10px] text-muted-foreground">
-                      {asset.tagNumberFormatted}
+              {idleAssets.length === 0 ? (
+                <p className="py-6 text-center text-xs text-muted-foreground">No idle assets detected.</p>
+              ) : (
+                idleAssets.map((asset) => (
+                  <div key={asset.assetId} className="py-3 flex items-center justify-between hover:bg-muted/30 px-2 rounded-lg transition-colors group">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center border border-border font-mono text-[10px] text-muted-foreground">
+                        {asset.tagNumberFormatted}
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-card-foreground group-hover:text-primary transition-colors">{asset.assetName}</h4>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-card-foreground group-hover:text-primary transition-colors">{asset.assetName}</h4>
-                      <p className="text-xs text-muted-foreground">Stored at: Office Storage / Media Rack</p>
-                    </div>
+                    <span className="px-3 py-1 text-xs rounded-full bg-secondary border border-border text-secondary-foreground font-semibold">
+                      {asset.detail}
+                    </span>
                   </div>
-                  <span className="px-3 py-1 text-xs rounded-full bg-secondary border border-border text-secondary-foreground font-semibold">
-                    {asset.detail}
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
 
         {/* Alerts & Heatmap row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
+
           {/* Alerts Panel */}
           <div className="bg-card border border-border rounded-xl p-6 flex flex-col">
             <h3 className="text-sm font-bold text-card-foreground mb-4 flex items-center gap-2">
               <ShieldAlert size={16} className="text-destructive" />
               <span>Assets due for maintenance / nearing retirement</span>
             </h3>
-            
+
             <div className="flex-1 space-y-4">
-              {alerts.map((alert) => (
-                <div
-                  key={alert.assetId}
-                  className={`p-4 rounded-xl border flex gap-4 ${
-                    alert.type === "MAINTENANCE"
-                      ? "bg-destructive/10 border-destructive/20 text-destructive-foreground"
-                      : "bg-muted/50 border-border text-muted-foreground"
-                  }`}
-                >
-                  {/* Alert Icon */}
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    alert.type === "MAINTENANCE"
-                      ? "bg-destructive/20 text-destructive border border-destructive/30"
-                      : "bg-muted flex items-center justify-center border border-border"
-                  }`}>
-                    {alert.type === "MAINTENANCE" ? <Wrench size={18} /> : <Heart size={18} />}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-2xs px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground font-medium">
-                        {alert.tagNumberFormatted}
-                      </span>
-                      <h4 className="text-sm font-bold text-foreground truncate">{alert.assetName}</h4>
+              {alerts.length === 0 ? (
+                <p className="py-6 text-center text-xs text-muted-foreground">No active alerts.</p>
+              ) : (
+                alerts.map((alert) => (
+                  <div
+                    key={`${alert.type}-${alert.assetId}`}
+                    className={`p-4 rounded-xl border flex gap-4 ${
+                      alert.type === "MAINTENANCE"
+                        ? "bg-destructive/10 border-destructive/20 text-destructive-foreground"
+                        : "bg-muted/50 border-border text-muted-foreground"
+                    }`}
+                  >
+                    {/* Alert Icon */}
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      alert.type === "MAINTENANCE"
+                        ? "bg-destructive/20 text-destructive border border-destructive/30"
+                        : "bg-muted flex items-center justify-center border border-border"
+                    }`}>
+                      {alert.type === "MAINTENANCE" ? <Wrench size={18} /> : <Heart size={18} />}
                     </div>
-                    
-                    <p className="text-xs text-muted-foreground mt-1 capitalize">
-                      {alert.message}
-                    </p>
 
-                    {/* Visual Indicators */}
-                    {alert.type === "MAINTENANCE" ? (
-                      <div className="flex items-center gap-3 mt-3">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-destructive/20 text-destructive font-bold border border-destructive/30">
-                          Critical Issue
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-2xs px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground font-medium">
+                          {alert.tagNumberFormatted}
                         </span>
-                        <span className="text-[10px] text-muted-foreground">Service due soon</span>
+                        <h4 className="text-sm font-bold text-foreground truncate">{alert.assetName}</h4>
                       </div>
-                    ) : (
-                      <div className="mt-3">
-                        {/* Lifespan progress */}
-                        <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden">
-                          <div className="bg-primary h-full rounded-full animate-pulse" style={{ width: "80%" }} />
+
+                      <p className="text-xs text-muted-foreground mt-1 capitalize">
+                        {alert.message}
+                      </p>
+
+                      {/* Visual Indicators */}
+                      {alert.type === "MAINTENANCE" ? (
+                        <div className="flex items-center gap-3 mt-3">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-destructive/20 text-destructive font-bold border border-destructive/30">
+                            {alert.priority}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">Service due soon</span>
                         </div>
-                        <div className="flex justify-between items-center mt-1 text-[10px] text-muted-foreground">
-                          <span>Year 4 of 5 (80% lifespan)</span>
-                          <span>Replace by 2027</span>
+                      ) : (
+                        <div className="mt-3">
+                          {/* Lifespan progress */}
+                          <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className="bg-primary h-full rounded-full"
+                              style={{ width: `${Math.min(100, Math.round((alert.daysRemainingOrAge / (NEARING_RETIREMENT_DISPLAY_YEARS)) * 100))}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center mt-1 text-[10px] text-muted-foreground">
+                            <span>{alert.daysRemainingOrAge} years old</span>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 

@@ -2,17 +2,17 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireCurrentUser } from "@/lib/auth/user";
 
-export async function GET() {
+export async function POST() {
   const user = await requireCurrentUser();
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const notifications = await prisma.notification.findMany({
-    where: { userId: user.id },
-    orderBy: { createdAt: "desc" },
+  await prisma.notification.updateMany({
+    where: { userId: user.id, isRead: false },
+    data: { isRead: true },
   });
 
-  return NextResponse.json(notifications);
+  return NextResponse.json({ success: true });
 }
