@@ -93,7 +93,7 @@ export function DepartmentFilters({
       </select>
 
       <Link
-        href="/departments/create"
+        href="/organization/departments/create"
         className={buttonVariants({ size: "lg", className: "px-5" })}
       >
         Add

@@ -47,7 +47,7 @@ export function DepartmentList({
               <StatusBadge status={department.status} />
               <div className="flex justify-end">
                 <Link
-                  href={`/departments/${department.id}/edit`}
+                  href={`/organization/departments/${department.id}/edit`}
                   aria-label={`Edit ${department.name}`}
                   className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
                 >

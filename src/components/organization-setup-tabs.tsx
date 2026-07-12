@@ -4,17 +4,17 @@ const tabs = [
   {
     key: "departments",
     label: "Departments",
-    href: "/departments",
+    href: "/organization/departments",
   },
   {
     key: "categories",
     label: "Categories",
-    href: "/asset-categories",
+    href: "/organization/asset-categories",
   },
   {
     key: "employees",
     label: "Employee",
-    href: "/employee-directory",
+    href: "/organization/employee-directory",
   },
 ] as const;
 

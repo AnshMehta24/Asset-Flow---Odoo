@@ -58,7 +58,7 @@ export function AssetCategoryFilters({
       </label>
 
       <Link
-        href="/asset-categories/create"
+        href="/organization/asset-categories/create"
         className={buttonVariants({ size: "lg", className: "px-5" })}
       >
         Add

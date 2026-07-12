@@ -56,6 +56,12 @@ export async function getEmployeeDirectoryList(filters: {
           name: true,
         },
       },
+      headOfDepartment: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
     },
   });
 }

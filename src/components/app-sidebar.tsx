@@ -75,7 +75,11 @@ export function AppSidebar({ user }: { user: AuthenticatedUser }) {
               {items.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
-                    isActive={pathname === item.href}
+                    isActive={
+                      item.href === "/"
+                        ? pathname === "/"
+                        : pathname === item.href || pathname.startsWith(item.href + "/")
+                    }
                     tooltip={item.label}
                     render={<Link href={item.href} />}
                   >
