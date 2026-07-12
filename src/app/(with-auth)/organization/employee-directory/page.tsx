@@ -4,8 +4,8 @@ import { getEmployeeDirectoryList } from "./_lib/employee-directory-data";
 import { OrganizationSetupTabs } from "@/components/organization-setup-tabs";
 import { requireCurrentUser } from "@/lib/auth/user";
 import { AccessDenied } from "@/components/access-denied";
-import { Pagination } from "@/components/ui/pagination";
 import prisma from "@/lib/prisma";
+import { Pagination } from "@/components/ui/pagination";
 
 export default async function EmployeeDirectoryPage({
   searchParams,
@@ -26,12 +26,12 @@ export default async function EmployeeDirectoryPage({
   const search = resolvedSearchParams.search?.trim() ?? "";
   const status =
     resolvedSearchParams.status === "ACTIVE" ||
-    resolvedSearchParams.status === "INACTIVE"
+      resolvedSearchParams.status === "INACTIVE"
       ? resolvedSearchParams.status
       : "ALL";
   const page = Number(resolvedSearchParams.page) || 1;
 
-  const [{ employees, totalCount, totalPages }, departments] = await Promise.all([
+  const [employeesData, departments] = await Promise.all([
     getEmployeeDirectoryList({
       search,
       status,
@@ -62,14 +62,13 @@ export default async function EmployeeDirectoryPage({
       />
       <div className="flex flex-col gap-4">
         <EmployeeDirectoryList
-          employees={employees}
+          employees={employeesData.employees}
           currentUserId={authedUser.id}
           currentUserRole={authedUser.role}
           departments={departments}
         />
-        <Pagination currentPage={page} totalPages={totalPages} totalCount={totalCount} />
+        <Pagination currentPage={page} totalPages={employeesData.totalPages} totalCount={employeesData.totalCount} />
       </div>
     </div>
   );
 }
-
