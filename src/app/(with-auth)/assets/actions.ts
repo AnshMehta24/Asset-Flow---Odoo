@@ -3,8 +3,10 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-import prisma from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/user";
+import { generateAndUploadAssetQrCode, isCloudinaryConfigured } from "@/lib/cloudinary";
+import prisma from "@/lib/prisma";
+import { formatAssetTag } from "@/lib/utils";
 
 export type AssetFormState = {
   success: boolean;
@@ -18,125 +20,109 @@ const INITIAL_STATE: AssetFormState = {
   fieldErrors: {},
 };
 
-// ──────────────────────────────────────────────
-// helpers
-// ──────────────────────────────────────────────
-
 function getString(fd: FormData, key: string) {
   return String(fd.get(key) ?? "").trim();
 }
 
 function getOptionalString(fd: FormData, key: string): string | null {
-  const v = getString(fd, key);
-  return v || null;
+  const value = getString(fd, key);
+  return value || null;
 }
 
 function getOptionalDecimal(fd: FormData, key: string): number | null {
   const raw = getString(fd, key);
   if (!raw) return null;
-  const n = parseFloat(raw);
-  return isNaN(n) ? null : n;
+  const value = Number.parseFloat(raw);
+  return Number.isNaN(value) ? null : value;
 }
 
 function getOptionalDate(fd: FormData, key: string): Date | null {
   const raw = getString(fd, key);
   if (!raw) return null;
-  const d = new Date(raw);
-  return isNaN(d.getTime()) ? null : d;
+  const value = new Date(raw);
+  return Number.isNaN(value.getTime()) ? null : value;
 }
 
-/** Parse newline-separated URL list */
 function parseUrlList(fd: FormData, key: string): string[] {
   const raw = getString(fd, key);
   if (!raw) return [];
+
   return raw
     .split("\n")
-    .map((u) => u.trim())
+    .map((item) => item.trim())
     .filter(Boolean);
 }
 
-/** Collect customField_<fieldId> entries from FormData */
-function parseCustomFields(
-  fd: FormData
-): { fieldId: string; value: string }[] {
+function parseCustomFields(fd: FormData): { fieldId: string; value: string }[] {
   const result: { fieldId: string; value: string }[] = [];
+
   fd.forEach((value, key) => {
-    if (key.startsWith("customField_")) {
-      const fieldId = key.replace("customField_", "");
-      const v = String(value).trim();
-      if (v) result.push({ fieldId, value: v });
+    if (!key.startsWith("customField_")) return;
+    const fieldId = key.replace("customField_", "");
+    const parsedValue = String(value).trim();
+    if (parsedValue) {
+      result.push({ fieldId, value: parsedValue });
     }
   });
+
   return result;
 }
 
-// ──────────────────────────────────────────────
-// Create asset
-// ──────────────────────────────────────────────
-
-export async function createAsset(
-  _prevState: AssetFormState,
-  formData: FormData
-): Promise<AssetFormState> {
-  const user = await getCurrentUser();
-  if (!user || (user.role !== "ADMIN" && user.role !== "ASSET_MANAGER")) {
-    return {
-      success: false,
-      message: "You do not have permission to register assets.",
-      fieldErrors: {},
-    };
-  }
-
-  const name = getString(formData, "name");
+async function validateAssetInput(
+  formData: FormData,
+  assetId?: string
+): Promise<{
+  fieldErrors: AssetFormState["fieldErrors"];
+  categoryId: string;
+}> {
   const categoryId = getString(formData, "categoryId");
   const serialNumber = getOptionalString(formData, "serialNumber");
-  const qrCode = getOptionalString(formData, "qrCode");
   const fieldErrors: AssetFormState["fieldErrors"] = {};
 
-  if (!name) fieldErrors.name = ["Asset name is required."];
-  if (!categoryId) fieldErrors.categoryId = ["Category is required."];
+  if (!getString(formData, "name")) {
+    fieldErrors.name = ["Asset name is required."];
+  }
 
-  // Validate category exists
-  if (categoryId) {
-    const cat = await prisma.assetCategory.findUnique({
+  if (!categoryId) {
+    fieldErrors.categoryId = ["Category is required."];
+  } else {
+    const category = await prisma.assetCategory.findUnique({
       where: { id: categoryId },
       select: { id: true },
     });
-    if (!cat) fieldErrors.categoryId = ["Selected category does not exist."];
+
+    if (!category) {
+      fieldErrors.categoryId = ["Selected category does not exist."];
+    }
   }
 
-  // Unique checks
   if (serialNumber) {
-    const dup = await prisma.asset.findFirst({
-      where: { serialNumber },
+    const duplicate = await prisma.asset.findFirst({
+      where: {
+        serialNumber,
+        ...(assetId ? { id: { not: assetId } } : {}),
+      },
       select: { id: true },
     });
-    if (dup) fieldErrors.serialNumber = ["Serial number already exists."];
-  }
-  if (qrCode) {
-    const dup = await prisma.asset.findFirst({
-      where: { qrCode },
-      select: { id: true },
-    });
-    if (dup) fieldErrors.qrCode = ["QR code already exists."];
+
+    if (duplicate) {
+      fieldErrors.serialNumber = ["Serial number already exists."];
+    }
   }
 
-  if (Object.keys(fieldErrors).length > 0) {
-    return {
-      success: false,
-      message: "Please correct the highlighted fields.",
-      fieldErrors,
-    };
-  }
+  return { fieldErrors, categoryId };
+}
 
-  const conditionRaw = getString(formData, "condition");
-  const statusRaw = getString(formData, "status");
-  const condition = (
-    ["NEW", "GOOD", "FAIR", "POOR", "DAMAGED"].includes(conditionRaw)
-      ? conditionRaw
-      : "GOOD"
+function parseCondition(formData: FormData) {
+  const value = getString(formData, "condition");
+  return (
+    ["NEW", "GOOD", "FAIR", "POOR", "DAMAGED"].includes(value) ? value : "GOOD"
   ) as "NEW" | "GOOD" | "FAIR" | "POOR" | "DAMAGED";
-  const status = (
+}
+
+function parseStatus(formData: FormData) {
+  const value = getString(formData, "status");
+  return (
     [
       "AVAILABLE",
       "ALLOCATED",
@@ -145,8 +131,8 @@ export async function createAsset(
       "LOST",
       "RETIRED",
       "DISPOSED",
-    ].includes(statusRaw)
-      ? statusRaw
+    ].includes(value)
+      ? value
       : "AVAILABLE"
   ) as
     | "AVAILABLE"
@@ -156,33 +142,70 @@ export async function createAsset(
     | "LOST"
     | "RETIRED"
     | "DISPOSED";
+}
+
+function buildAssetQrPayload(asset: {
+  id: string;
+  tagNumber: number;
+  name: string;
+  serialNumber: string | null;
+}) {
+  return JSON.stringify({
+    assetId: asset.id,
+    tag: formatAssetTag(asset.tagNumber),
+    name: asset.name,
+    serialNumber: asset.serialNumber,
+  });
+}
+
+export async function createAsset(
+  _prevState: AssetFormState = INITIAL_STATE,
+  formData: FormData
+): Promise<AssetFormState> {
+  void _prevState;
+
+  const user = await getCurrentUser();
+  if (!user || !["ADMIN", "ASSET_MANAGER"].includes(user.role)) {
+    return {
+      success: false,
+      message: "You do not have permission to register assets.",
+      fieldErrors: {},
+    };
+  }
+
+  const { fieldErrors, categoryId } = await validateAssetInput(formData);
+  if (Object.keys(fieldErrors).length > 0) {
+    return {
+      success: false,
+      message: "Please correct the highlighted fields.",
+      fieldErrors,
+    };
+  }
 
   const customFields = parseCustomFields(formData);
-
-  // Validate custom field IDs belong to the selected category
   let validFieldIds: string[] = [];
+
   if (customFields.length > 0) {
     const fields = await prisma.assetCategoryField.findMany({
       where: { categoryId },
-      select: { id: true, fieldType: true },
+      select: { id: true },
     });
-    validFieldIds = fields.map((f) => f.id);
+    validFieldIds = fields.map((field) => field.id);
   }
 
   const asset = await prisma.asset.create({
     data: {
-      name,
+      name: getString(formData, "name"),
       description: getOptionalString(formData, "description"),
-      serialNumber,
-      qrCode,
+      serialNumber: getOptionalString(formData, "serialNumber"),
       manufacturer: getOptionalString(formData, "manufacturer"),
       model: getOptionalString(formData, "model"),
       acquisitionDate: getOptionalDate(formData, "acquisitionDate"),
       acquisitionCost: getOptionalDecimal(formData, "acquisitionCost"),
       warrantyStartDate: getOptionalDate(formData, "warrantyStartDate"),
       warrantyEndDate: getOptionalDate(formData, "warrantyEndDate"),
-      condition,
-      status,
+      condition: parseCondition(formData),
+      status: parseStatus(formData),
       location: getOptionalString(formData, "location"),
       isBookable: formData.get("isBookable") === "true",
       notes: getOptionalString(formData, "notes"),
@@ -191,34 +214,56 @@ export async function createAsset(
       categoryId,
       departmentId: getOptionalString(formData, "departmentId"),
       registeredById: user.id,
-      // Write custom field values
       customFieldValues: {
         create: customFields
-          .filter((cf) => validFieldIds.includes(cf.fieldId))
-          .map((cf) => ({
-            fieldId: cf.fieldId,
-            valueText: cf.value,
+          .filter((field) => validFieldIds.includes(field.fieldId))
+          .map((field) => ({
+            fieldId: field.fieldId,
+            valueText: field.value,
           })),
       },
     },
-    select: { id: true },
+    select: {
+      id: true,
+      tagNumber: true,
+      name: true,
+      serialNumber: true,
+    },
   });
 
+  if (isCloudinaryConfigured()) {
+    try {
+      const qrUpload = await generateAndUploadAssetQrCode(
+        buildAssetQrPayload(asset),
+        asset.id
+      );
+
+      await prisma.asset.update({
+        where: { id: asset.id },
+        data: {
+          qrCode: qrUpload.secure_url,
+        },
+      });
+    } catch (error) {
+      console.error("Failed to generate asset QR code", error);
+    }
+  }
+
   revalidatePath("/assets");
+  revalidatePath(`/assets/${asset.id}`);
+  revalidatePath("/");
   redirect(`/assets/${asset.id}`);
 }
 
-// ──────────────────────────────────────────────
-// Update asset
-// ──────────────────────────────────────────────
-
 export async function updateAsset(
   assetId: string,
-  _prevState: AssetFormState,
+  _prevState: AssetFormState = INITIAL_STATE,
   formData: FormData
 ): Promise<AssetFormState> {
+  void _prevState;
+
   const user = await getCurrentUser();
-  if (!user || (user.role !== "ADMIN" && user.role !== "ASSET_MANAGER")) {
+  if (!user || !["ADMIN", "ASSET_MANAGER"].includes(user.role)) {
     return {
       success: false,
       message: "You do not have permission to edit assets.",
@@ -226,30 +271,7 @@ export async function updateAsset(
     };
   }
 
-  const name = getString(formData, "name");
-  const categoryId = getString(formData, "categoryId");
-  const serialNumber = getOptionalString(formData, "serialNumber");
-  const qrCode = getOptionalString(formData, "qrCode");
-  const fieldErrors: AssetFormState["fieldErrors"] = {};
-
-  if (!name) fieldErrors.name = ["Asset name is required."];
-  if (!categoryId) fieldErrors.categoryId = ["Category is required."];
-
-  if (serialNumber) {
-    const dup = await prisma.asset.findFirst({
-      where: { serialNumber, id: { not: assetId } },
-      select: { id: true },
-    });
-    if (dup) fieldErrors.serialNumber = ["Serial number already exists."];
-  }
-  if (qrCode) {
-    const dup = await prisma.asset.findFirst({
-      where: { qrCode, id: { not: assetId } },
-      select: { id: true },
-    });
-    if (dup) fieldErrors.qrCode = ["QR code already exists."];
-  }
-
+  const { fieldErrors, categoryId } = await validateAssetInput(formData, assetId);
   if (Object.keys(fieldErrors).length > 0) {
     return {
       success: false,
@@ -258,62 +280,29 @@ export async function updateAsset(
     };
   }
 
-  const conditionRaw = getString(formData, "condition");
-  const statusRaw = getString(formData, "status");
-  const condition = (
-    ["NEW", "GOOD", "FAIR", "POOR", "DAMAGED"].includes(conditionRaw)
-      ? conditionRaw
-      : "GOOD"
-  ) as "NEW" | "GOOD" | "FAIR" | "POOR" | "DAMAGED";
-  const status = (
-    [
-      "AVAILABLE",
-      "ALLOCATED",
-      "RESERVED",
-      "UNDER_MAINTENANCE",
-      "LOST",
-      "RETIRED",
-      "DISPOSED",
-    ].includes(statusRaw)
-      ? statusRaw
-      : "AVAILABLE"
-  ) as
-    | "AVAILABLE"
-    | "ALLOCATED"
-    | "RESERVED"
-    | "UNDER_MAINTENANCE"
-    | "LOST"
-    | "RETIRED"
-    | "DISPOSED";
-
   const customFields = parseCustomFields(formData);
-
-  // Get valid field IDs for category
   const fields = await prisma.assetCategoryField.findMany({
     where: { categoryId },
-    select: { id: true, fieldType: true },
+    select: { id: true },
   });
-  const fieldMap = new Map(fields.map((f) => [f.id, f]));
+  const validFieldIds = new Set(fields.map((field) => field.id));
 
   await prisma.$transaction([
-    // delete old custom field values
     prisma.assetCustomFieldValue.deleteMany({ where: { assetId } }),
-    // update asset
     prisma.asset.update({
       where: { id: assetId },
       data: {
-        name,
+        name: getString(formData, "name"),
         description: getOptionalString(formData, "description"),
-        serialNumber,
-        qrCode,
+        serialNumber: getOptionalString(formData, "serialNumber"),
         manufacturer: getOptionalString(formData, "manufacturer"),
         model: getOptionalString(formData, "model"),
         acquisitionDate: getOptionalDate(formData, "acquisitionDate"),
         acquisitionCost: getOptionalDecimal(formData, "acquisitionCost"),
         warrantyStartDate: getOptionalDate(formData, "warrantyStartDate"),
         warrantyEndDate: getOptionalDate(formData, "warrantyEndDate"),
-        condition,
-        status,
+        condition: parseCondition(formData),
+        status: parseStatus(formData),
         location: getOptionalString(formData, "location"),
         isBookable: formData.get("isBookable") === "true",
         notes: getOptionalString(formData, "notes"),
@@ -323,22 +312,22 @@ export async function updateAsset(
         departmentId: getOptionalString(formData, "departmentId"),
       },
     }),
-    // write new custom field values
-    ...(customFields
-      .filter((cf) => fieldMap.has(cf.fieldId))
-      .map((cf) =>
+    ...customFields
+      .filter((field) => validFieldIds.has(field.fieldId))
+      .map((field) =>
         prisma.assetCustomFieldValue.create({
           data: {
             assetId,
-            fieldId: cf.fieldId,
-            valueText: cf.value,
+            fieldId: field.fieldId,
+            valueText: field.value,
           },
         })
-      )),
+      ),
   ]);
 
   revalidatePath("/assets");
   revalidatePath(`/assets/${assetId}`);
   revalidatePath(`/assets/${assetId}/edit`);
+  revalidatePath("/");
   redirect(`/assets/${assetId}`);
 }

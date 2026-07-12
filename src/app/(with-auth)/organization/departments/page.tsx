@@ -10,6 +10,7 @@ export default async function DepartmentsPage({
   searchParams: Promise<{
     search?: string;
     status?: string;
+    page?: string;
   }>;
 }) {
   const user = await requireCurrentUser();
@@ -25,14 +26,20 @@ export default async function DepartmentsPage({
     resolvedSearchParams.status === "INACTIVE"
       ? resolvedSearchParams.status
       : "ALL";
-  const departments = await getDepartmentList({
+  const page = Number(resolvedSearchParams.page) || 1;
+
+  const { departments, totalCount, totalPages } = await getDepartmentList({
     search,
     status,
+    page,
   });
 
   return (
     <DepartmentScreen search={search} status={status}>
-      <DepartmentList departments={departments} />
+      <div className="flex flex-col gap-4">
+        <DepartmentList departments={departments} />
+        <Pagination currentPage={page} totalPages={totalPages} totalCount={totalCount} />
+      </div>
     </DepartmentScreen>
   );
 }

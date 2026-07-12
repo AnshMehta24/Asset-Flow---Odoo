@@ -24,70 +24,83 @@ export type DepartmentFormOptions = {
 export type DepartmentListFilters = {
   search?: string;
   status?: "ALL" | "ACTIVE" | "INACTIVE";
+  page?: number;
 };
 
 export async function getDepartmentList(filters: DepartmentListFilters = {}) {
   const search = filters.search?.trim();
   const statusFilter = filters.status && filters.status !== "ALL" ? filters.status : undefined;
 
-  const departments = await prisma.department.findMany({
-    where: {
-      ...(statusFilter ? { status: statusFilter } : {}),
-      ...(search
-        ? {
-            OR: [
-              {
-                name: {
-                  contains: search,
-                  mode: "insensitive",
-                },
-              },
-              {
-                code: {
-                  contains: search,
-                  mode: "insensitive",
-                },
-              },
-              {
-                head: {
-                  is: {
-                    name: {
-                      contains: search,
-                      mode: "insensitive",
-                    },
-                  },
-                },
-              },
-              {
-                parent: {
-                  is: {
-                    name: {
-                      contains: search,
-                      mode: "insensitive",
-                    },
-                  },
-                },
-              },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ createdAt: "desc" }],
-    include: {
-      parent: {
-        select: {
-          name: true,
-        },
-      },
-      head: {
-        select: {
-          name: true,
-        },
-      },
-    },
-  });
+  const page = filters.page && filters.page > 0 ? filters.page : 1;
+  const pageSize = 10;
 
-  return departments.map((department) => ({
+  const whereClause = {
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(search
+      ? {
+          OR: [
+            {
+              name: {
+                contains: search,
+                mode: "insensitive" as const,
+              },
+            },
+            {
+              code: {
+                contains: search,
+                mode: "insensitive" as const,
+              },
+            },
+            {
+              head: {
+                is: {
+                  name: {
+                    contains: search,
+                    mode: "insensitive" as const,
+                  },
+                },
+              },
+            },
+            {
+              parent: {
+                is: {
+                  name: {
+                    contains: search,
+                    mode: "insensitive" as const,
+                  },
+                },
+              },
+            },
+          ],
+        }
+      : {}),
+  };
+
+  const [departments, totalCount] = await Promise.all([
+    prisma.department.findMany({
+      where: whereClause,
+      orderBy: [{ createdAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        parent: {
+          select: {
+            name: true,
+          },
+        },
+        head: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    }),
+    prisma.department.count({
+      where: whereClause,
+    }),
+  ]);
+
+  const items = departments.map((department) => ({
     id: department.id,
     name: department.name,
     code: department.code,
@@ -95,6 +108,12 @@ export async function getDepartmentList(filters: DepartmentListFilters = {}) {
     parentName: department.parent?.name ?? null,
     headName: department.head?.name ?? null,
   })) satisfies DepartmentListItem[];
+
+  return {
+    departments: items,
+    totalCount,
+    totalPages: Math.ceil(totalCount / pageSize),
+  };
 }
 
 export async function getDepartmentFormOptions(excludeDepartmentId?: string) {

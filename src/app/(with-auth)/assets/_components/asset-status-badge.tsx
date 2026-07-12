@@ -18,26 +18,27 @@ export const CONDITION_LABELS: Record<string, string> = {
 
 const STATUS_STYLES: Record<string, string> = {
   AVAILABLE:
-    "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400",
+    "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/30",
   ALLOCATED:
-    "bg-blue-500/10 text-blue-600 border-blue-500/20 dark:text-blue-400",
+    "bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/30",
   RESERVED:
-    "bg-violet-500/10 text-violet-600 border-violet-500/20 dark:text-violet-400",
+    "bg-violet-500/10 text-violet-600 border-violet-500/20 dark:bg-violet-500/15 dark:text-violet-400 dark:border-violet-500/30",
   UNDER_MAINTENANCE:
-    "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400",
-  LOST: "bg-red-500/10 text-red-600 border-red-500/20 dark:text-red-400",
+    "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30",
+  LOST:
+    "bg-red-500/10 text-red-600 border-red-500/20 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/30",
   RETIRED:
-    "bg-slate-500/10 text-slate-600 border-slate-500/20 dark:text-slate-400",
+    "bg-slate-500/10 text-slate-600 border-slate-500/20 dark:bg-slate-500/15 dark:text-slate-400 dark:border-slate-500/30",
   DISPOSED:
-    "bg-zinc-500/10 text-zinc-600 border-zinc-500/20 dark:text-zinc-400",
+    "bg-zinc-500/10 text-zinc-600 border-zinc-500/20 dark:bg-zinc-500/15 dark:text-zinc-400 dark:border-zinc-500/30",
 };
 
 const CONDITION_STYLES: Record<string, string> = {
-  NEW: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400",
-  GOOD: "bg-blue-500/10 text-blue-600 border-blue-500/20 dark:text-blue-400",
-  FAIR: "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400",
-  POOR: "bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-400",
-  DAMAGED: "bg-red-500/10 text-red-600 border-red-500/20 dark:text-red-400",
+  NEW: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/30",
+  GOOD: "bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/30",
+  FAIR: "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30",
+  POOR: "bg-orange-500/10 text-orange-600 border-orange-500/20 dark:bg-orange-500/15 dark:text-orange-400 dark:border-orange-500/30",
+  DAMAGED: "bg-red-500/10 text-red-600 border-red-500/20 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/30",
 };
 
 export function AssetStatusBadge({ status }: { status: string }) {
@@ -48,7 +49,7 @@ export function AssetStatusBadge({ status }: { status: string }) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${style}`}
+      className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase ${style} select-none`}
     >
       {label}
     </span>
@@ -63,7 +64,7 @@ export function AssetConditionBadge({ condition }: { condition: string }) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${style}`}
+      className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase ${style} select-none`}
     >
       {label}
     </span>

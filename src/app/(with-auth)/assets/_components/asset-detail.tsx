@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PencilLine, Package, MapPin, Building2, User, Calendar, DollarSign, Shield, Tag, FileText, BookOpen, ChevronLeft } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { AssetStatusBadge, AssetConditionBadge, STATUS_LABELS, CONDITION_LABELS } from "./asset-status-badge";
+import { AssetStatusBadge, AssetConditionBadge, STATUS_LABELS } from "./asset-status-badge";
 import { formatAssetTag } from "@/lib/utils";
 import type { AssetDetail } from "../_lib/asset-data";
 
@@ -44,6 +44,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function AssetDetail({ asset, canEdit }: Props) {
   const tag = formatAssetTag(asset.tagNumber);
   const activeAllocation = asset.allocations[0] ?? null;
+  const hasQrImage = Boolean(asset.qrCode?.startsWith("http"));
 
   // Build custom fields map
   const customValueMap = new Map<string, string>();
@@ -158,7 +159,7 @@ export function AssetDetail({ asset, canEdit }: Props) {
               {asset.serialNumber && (
                 <InfoRow icon={Tag} label="Serial Number" value={asset.serialNumber} />
               )}
-              {asset.qrCode && (
+              {asset.qrCode && !hasQrImage && (
                 <InfoRow icon={Tag} label="QR Code" value={asset.qrCode} />
               )}
               {asset.manufacturer && (
@@ -274,6 +275,21 @@ export function AssetDetail({ asset, canEdit }: Props) {
 
         {/* ── Right column (1/3) ── */}
         <div className="flex flex-col gap-5">
+          {hasQrImage && asset.qrCode && (
+            <Section title="QR Code">
+              <div className="py-4">
+                <a href={asset.qrCode} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={asset.qrCode}
+                    alt={`${asset.name} QR code`}
+                    className="mx-auto aspect-square w-full max-w-[240px] rounded-2xl border border-border bg-white object-contain p-3"
+                  />
+                </a>
+              </div>
+            </Section>
+          )}
+
           {/* Photos */}
           {asset.photoUrls.length > 0 && (
             <Section title="Photos">

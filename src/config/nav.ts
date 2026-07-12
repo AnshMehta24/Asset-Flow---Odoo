@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   BarChart3,
   Bell,
+  Laptop,
 } from "lucide-react";
 import type { Role } from "../../generated/prisma/client";
 
@@ -30,6 +31,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Dashboard",
     href: "/",
     icon: LayoutDashboard,
+    roles: ALL_ROLES,
+  },
+  {
+    label: "My Resources",
+    href: "/resources",
+    icon: Laptop,
     roles: ALL_ROLES,
   },
   {
