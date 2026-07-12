@@ -20,47 +20,55 @@ export async function POST(request: Request) {
 
   const { name, email, password } = parsed.data;
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true },
-  });
+  try {
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
 
-  if (existingUser) {
+    if (existingUser) {
+      return NextResponse.json(
+        { error: "An account with this email already exists." },
+        { status: 409 }
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash,
+        role: "EMPLOYEE",
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        status: true,
+        departmentId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    const token = await createSessionToken({
+      sub: user.id,
+      role: user.role,
+      status: user.status,
+      departmentId: user.departmentId,
+    });
+
+    await setSessionCookie(token);
+
+    return NextResponse.json({ success: true }, { status: 201 });
+  } catch (error: any) {
+    console.error("Signup error:", error);
     return NextResponse.json(
-      { error: "An account with this email already exists." },
-      { status: 409 }
+      { error: "Database connection failed. Please verify the database password in your local .env configuration." },
+      { status: 500 }
     );
   }
-
-  const passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
-
-  const user = await prisma.user.create({
-    data: {
-      name,
-      email,
-      passwordHash,
-      role: "EMPLOYEE",
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      status: true,
-      departmentId: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
-
-  const token = await createSessionToken({
-    sub: user.id,
-    role: user.role,
-    status: user.status,
-    departmentId: user.departmentId,
-  });
-
-  await setSessionCookie(token);
-
-  return NextResponse.json({ success: true }, { status: 201 });
 }

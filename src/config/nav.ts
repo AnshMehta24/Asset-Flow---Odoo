@@ -77,7 +77,7 @@ export const NAV_ITEMS: NavItem[] = [
     // the current user has an AuditAssignment on an active AuditCycle,
     // regardless of role.
     label: "Audit",
-    href: "/audit",
+    href: "/audits",
     icon: ClipboardCheck,
     roles: ["ADMIN", "ASSET_MANAGER"],
   },
